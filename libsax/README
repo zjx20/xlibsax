@@ -1,0 +1,14 @@
+libsax: SAX-0.2
+
+SAX (Scalable Adapters and eXtensions) provides simple API and C++ 
+templates (based on STL) for developing cross-platform applications.
+
+Qingshan Luo, qluo.cn@gmail.com
+Apr. 2011, May. 2011
+
+
+NOTE: tinyxml-2.6.2 + ticpp-2.5.3 has been integrated.
+TinyXML is a simple, small, C++ XML parser that can be easily 
+integrating into other programs.
+http://www.grinninglizard.com/tinyxml/
+

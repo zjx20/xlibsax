@@ -1,0 +1,408 @@
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  ms/call  ms/call  name    
+ 21.43      0.27     0.27 37000000     0.00     0.00  sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int)
+ 19.84      0.52     0.25 37000000     0.00     0.00  sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int)
+ 15.08      0.71     0.19                             _fu47___ZNSs4_Rep20_S_empty_rep_storageE
+  7.14      0.80     0.09  9000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldBegin_virt(std::string&, apache::thrift::protocol::TType&, short&)
+  6.35      0.88     0.08  1000000     0.00     0.00  bool std::__equal<true>::equal<int>(int const*, int const*, int const*)
+  4.76      0.94     0.06  1000000     0.00     0.00  ComplexObj::write(apache::thrift::protocol::TProtocol*) const
+  4.76      1.00     0.06                             _fu26___ZNSs4_Rep20_S_empty_rep_storageE
+  3.17      1.04     0.04        1    40.00   438.89  void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*)
+  2.38      1.07     0.03 11000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI32_virt(int&)
+  2.38      1.10     0.03 11000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI32_virt(int)
+  2.38      1.13     0.03                             _fu27___ZNSs4_Rep20_S_empty_rep_storageE
+  0.79      1.14     0.01  9000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldEnd_virt()
+  0.79      1.15     0.01  8000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldEnd_virt()
+  0.79      1.16     0.01  8000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldBegin_virt(char const*, apache::thrift::protocol::TType, short)
+  0.79      1.17     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI16_virt(short&)
+  0.79      1.18     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI16_virt(short)
+  0.79      1.19     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readDouble_virt(double&)
+  0.79      1.20     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readString_virt(std::string&)
+  0.79      1.21     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeDouble_virt(double)
+  0.79      1.22     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeString_virt(std::string const&)
+  0.79      1.23     0.01  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListEnd_virt()
+  0.79      1.24     0.01  1000000     0.00     0.00  apache::thrift::transport::TTransport::borrow_virt(unsigned char*, unsigned int*)
+  0.79      1.25     0.01  1000000     0.00     0.00  std::vector<int, std::allocator<int> >::_M_fill_insert(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, unsigned int, int const&)
+  0.79      1.26     0.01                             _fu48___ZNSs4_Rep20_S_empty_rep_storageE
+  0.00      1.26     0.00  1000000     0.00     0.00  ComplexObj::read(apache::thrift::protocol::TProtocol*)
+  0.00      1.26     0.00  1000000     0.00     0.00  sax::old::TBufferTransport::flush()
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI64_virt(long long&)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readBool_virt(bool&)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readByte_virt(signed char&)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI64_virt(long long)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeBool_virt(bool)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeByte_virt(signed char)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListEnd_virt()
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListBegin_virt(apache::thrift::protocol::TType&, unsigned int&)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructEnd_virt()
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldStop_virt()
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListBegin_virt(apache::thrift::protocol::TType, unsigned int)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructEnd_virt()
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructBegin_virt(std::string&)
+  0.00      1.26     0.00  1000000     0.00     0.00  apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructBegin_virt(char const*)
+  0.00      1.26     0.00       32     0.00     0.00  sax::old::concurrent_queue<void*>::~concurrent_queue()
+  0.00      1.26     0.00        5     0.00     0.00  std::vector<int, std::allocator<int> >::_M_insert_aux(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, int const&)
+  0.00      1.26     0.00        2     0.00     0.00  boost::detail::sp_counted_base::destroy()
+  0.00      1.26     0.00        1     0.00   438.89  test6()
+  0.00      1.26     0.00        1     0.00     0.00  sax::old::TBufferTransport::~TBufferTransport()
+  0.00      1.26     0.00        1     0.00     0.00  boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::dispose()
+  0.00      1.26     0.00        1     0.00     0.00  boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::~sp_counted_impl_p()
+  0.00      1.26     0.00        1     0.00     0.00  boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::dispose()
+  0.00      1.26     0.00        1     0.00     0.00  boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::~sp_counted_impl_p()
+  0.00      1.26     0.00        1     0.00     0.00  apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::~TBinaryProtocolT()
+
+ %         the percentage of the total running time of the
+time       program used by this function.
+
+cumulative a running sum of the number of seconds accounted
+ seconds   for by this function and those listed above it.
+
+ self      the number of seconds accounted for by this
+seconds    function alone.  This is the major sort for this
+           listing.
+
+calls      the number of times this function was invoked, if
+           this function is profiled, else blank.
+ 
+ self      the average number of milliseconds spent in this
+ms/call    function per call, if this function is profiled,
+	   else blank.
+
+ total     the average number of milliseconds spent in this
+ms/call    function and its descendents per call, if this 
+	   function is profiled, else blank.
+
+name       the name of the function.  This is the minor sort
+           for this listing. The index shows the location of
+	   the function in the gprof listing. If the index is
+	   in parenthesis it shows where it would appear in
+	   the gprof listing if it were to be printed.
+
+		     Call graph (explanation follows)
+
+
+granularity: each sample hit covers 4 byte(s) for 0.79% of 1.26 seconds
+
+index % time    self  children    called     name
+                0.00    0.44       1/1           main [4]
+[2]     34.8    0.00    0.44       1         test6() [2]
+                0.04    0.40       1/1           void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*) [3]
+                0.00    0.00      32/32          sax::old::concurrent_queue<void*>::~concurrent_queue() [63]
+                0.00    0.00       2/2           boost::detail::sp_counted_base::destroy() [65]
+                0.00    0.00       1/1           sax::old::TBufferTransport::~TBufferTransport() [66]
+                0.00    0.00       1/1           boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::dispose() [67]
+                0.00    0.00       1/1           boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::~sp_counted_impl_p() [68]
+                0.00    0.00       1/1           apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::~TBinaryProtocolT() [71]
+                0.00    0.00       1/1           boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::dispose() [69]
+                0.00    0.00       1/1           boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::~sp_counted_impl_p() [70]
+-----------------------------------------------
+                0.04    0.40       1/1           test6() [2]
+[3]     34.8    0.04    0.40       1         void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*) [3]
+                0.06    0.34 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+                0.00    0.00 1000000/1000000     sax::old::TBufferTransport::flush() [57]
+-----------------------------------------------
+                                                 <spontaneous>
+[4]     34.8    0.00    0.44                 main [4]
+                0.00    0.44       1/1           test6() [2]
+-----------------------------------------------
+                0.06    0.34 1000000/1000000     void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*) [3]
+[5]     31.7    0.06    0.34 1000000         ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+                0.01    0.11 8000000/8000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldBegin_virt(char const*, apache::thrift::protocol::TType, short) [10]
+                0.03    0.07 11000000/11000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI32_virt(int) [12]
+                0.01    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeString_virt(std::string const&) [16]
+                0.01    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI16_virt(short) [21]
+                0.01    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeDouble_virt(double) [22]
+                0.00    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListBegin_virt(apache::thrift::protocol::TType, unsigned int) [24]
+                0.01    0.00 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListEnd_virt() [27]
+                0.01    0.00 8000000/9000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldEnd_virt() [25]
+                0.00    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeBool_virt(bool) [34]
+                0.00    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeByte_virt(signed char) [35]
+                0.00    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI64_virt(long long) [33]
+                0.00    0.01 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldStop_virt() [36]
+                0.00    0.00 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructBegin_virt(char const*) [62]
+                0.00    0.00 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructEnd_virt() [60]
+-----------------------------------------------
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int) [18]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI16_virt(short&) [19]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI64_virt(long long&) [30]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readBool_virt(bool&) [31]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readByte_virt(signed char&) [32]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readDouble_virt(double&) [20]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readString_virt(std::string&) [14]
+                0.01    0.00 2000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListBegin_virt(apache::thrift::protocol::TType&, unsigned int&) [23]
+                0.08    0.00 11000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI32_virt(int&) [11]
+                0.12    0.00 17000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldBegin_virt(std::string&, apache::thrift::protocol::TType&, short&) [8]
+[6]     21.4    0.27    0.00 37000000         sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI16_virt(short) [21]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI64_virt(long long) [33]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeBool_virt(bool) [34]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeByte_virt(signed char) [35]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeDouble_virt(double) [22]
+                0.01    0.00 1000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldStop_virt() [36]
+                0.01    0.00 2000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeString_virt(std::string const&) [16]
+                0.01    0.00 2000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListBegin_virt(apache::thrift::protocol::TType, unsigned int) [24]
+                0.07    0.00 11000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI32_virt(int) [12]
+                0.11    0.00 16000000/37000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldBegin_virt(char const*, apache::thrift::protocol::TType, short) [10]
+[7]     19.8    0.25    0.00 37000000         sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.09    0.12 9000000/9000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[8]     17.0    0.09    0.12 9000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldBegin_virt(std::string&, apache::thrift::protocol::TType&, short&) [8]
+                0.12    0.00 17000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.11 8000000/8000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[10]     9.4    0.01    0.11 8000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldBegin_virt(char const*, apache::thrift::protocol::TType, short) [10]
+                0.11    0.00 16000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.03    0.08 11000000/11000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[11]     8.8    0.03    0.08 11000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI32_virt(int&) [11]
+                0.08    0.00 11000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.03    0.07 11000000/11000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[12]     8.3    0.03    0.07 11000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI32_virt(int) [12]
+                0.07    0.00 11000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.08    0.00 1000000/1000000     _fu26___ZNSs4_Rep20_S_empty_rep_storageE [9]
+[13]     6.3    0.08    0.00 1000000         bool std::__equal<true>::equal<int>(int const*, int const*, int const*) [13]
+-----------------------------------------------
+                0.01    0.02 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[14]     2.7    0.01    0.02 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readString_virt(std::string&) [14]
+                0.00    0.02 1000000/1000000     apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int) [18]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[16]     1.9    0.01    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeString_virt(std::string const&) [16]
+                0.01    0.00 2000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.02 1000000/1000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readString_virt(std::string&) [14]
+[18]     1.4    0.00    0.02 1000000         apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int) [18]
+                0.01    0.00 1000000/1000000     apache::thrift::transport::TTransport::borrow_virt(unsigned char*, unsigned int*) [28]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[19]     1.4    0.01    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI16_virt(short&) [19]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[20]     1.4    0.01    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readDouble_virt(double&) [20]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.01    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[21]     1.3    0.01    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI16_virt(short) [21]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.01    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[22]     1.3    0.01    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeDouble_virt(double) [22]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[23]     1.2    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListBegin_virt(apache::thrift::protocol::TType&, unsigned int&) [23]
+                0.01    0.00 2000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[24]     1.1    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListBegin_virt(apache::thrift::protocol::TType, unsigned int) [24]
+                0.01    0.00 2000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.00 1000000/9000000     sax::old::memory_pool::~memory_pool() [37]
+                0.01    0.00 8000000/9000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[25]     0.8    0.01    0.00 9000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldEnd_virt() [25]
+-----------------------------------------------
+                0.01    0.00 8000000/8000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[26]     0.8    0.01    0.00 8000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldEnd_virt() [26]
+-----------------------------------------------
+                0.01    0.00 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[27]     0.8    0.01    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListEnd_virt() [27]
+-----------------------------------------------
+                0.01    0.00 1000000/1000000     apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int) [18]
+[28]     0.8    0.01    0.00 1000000         apache::thrift::transport::TTransport::borrow_virt(unsigned char*, unsigned int*) [28]
+-----------------------------------------------
+                0.01    0.00 1000000/1000000     _fu48___ZNSs4_Rep20_S_empty_rep_storageE [17]
+[29]     0.8    0.01    0.00 1000000         std::vector<int, std::allocator<int> >::_M_fill_insert(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, unsigned int, int const&) [29]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[30]     0.6    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI64_virt(long long&) [30]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[31]     0.6    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readBool_virt(bool&) [31]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[32]     0.6    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readByte_virt(signed char&) [32]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [6]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[33]     0.5    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI64_virt(long long) [33]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[34]     0.5    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeBool_virt(bool) [34]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[35]     0.5    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeByte_virt(signed char) [35]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                0.00    0.01 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[36]     0.5    0.00    0.01 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldStop_virt() [36]
+                0.01    0.00 1000000/37000000     sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [7]
+-----------------------------------------------
+                                                 <spontaneous>
+[37]     0.1    0.00    0.00                 sax::old::memory_pool::~memory_pool() [37]
+                0.00    0.00 1000000/9000000     apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldEnd_virt() [25]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     _fu26___ZNSs4_Rep20_S_empty_rep_storageE [9]
+[56]     0.0    0.00    0.00 1000000         ComplexObj::read(apache::thrift::protocol::TProtocol*) [56]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*) [3]
+[57]     0.0    0.00    0.00 1000000         sax::old::TBufferTransport::flush() [57]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[58]     0.0    0.00    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListEnd_virt() [58]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[59]     0.0    0.00    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructEnd_virt() [59]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[60]     0.0    0.00    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructEnd_virt() [60]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     _fu47___ZNSs4_Rep20_S_empty_rep_storageE [1]
+[61]     0.0    0.00    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructBegin_virt(std::string&) [61]
+-----------------------------------------------
+                0.00    0.00 1000000/1000000     ComplexObj::write(apache::thrift::protocol::TProtocol*) const [5]
+[62]     0.0    0.00    0.00 1000000         apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructBegin_virt(char const*) [62]
+-----------------------------------------------
+                0.00    0.00      32/32          test6() [2]
+[63]     0.0    0.00    0.00      32         sax::old::concurrent_queue<void*>::~concurrent_queue() [63]
+-----------------------------------------------
+                0.00    0.00       5/5           _fu27___ZNSs4_Rep20_S_empty_rep_storageE [15]
+[64]     0.0    0.00    0.00       5         std::vector<int, std::allocator<int> >::_M_insert_aux(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, int const&) [64]
+-----------------------------------------------
+                0.00    0.00       2/2           test6() [2]
+[65]     0.0    0.00    0.00       2         boost::detail::sp_counted_base::destroy() [65]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[66]     0.0    0.00    0.00       1         sax::old::TBufferTransport::~TBufferTransport() [66]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[67]     0.0    0.00    0.00       1         boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::dispose() [67]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[68]     0.0    0.00    0.00       1         boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::~sp_counted_impl_p() [68]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[69]     0.0    0.00    0.00       1         boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::dispose() [69]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[70]     0.0    0.00    0.00       1         boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::~sp_counted_impl_p() [70]
+-----------------------------------------------
+                0.00    0.00       1/1           test6() [2]
+[71]     0.0    0.00    0.00       1         apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::~TBinaryProtocolT() [71]
+-----------------------------------------------
+
+ This table describes the call tree of the program, and was sorted by
+ the total amount of time spent in each function and its children.
+
+ Each entry in this table consists of several lines.  The line with the
+ index number at the left hand margin lists the current function.
+ The lines above it list the functions that called this function,
+ and the lines below it list the functions this one called.
+ This line lists:
+     index	A unique number given to each element of the table.
+		Index numbers are sorted numerically.
+		The index number is printed next to every function name so
+		it is easier to look up where the function in the table.
+
+     % time	This is the percentage of the `total' time that was spent
+		in this function and its children.  Note that due to
+		different viewpoints, functions excluded by options, etc,
+		these numbers will NOT add up to 100%.
+
+     self	This is the total amount of time spent in this function.
+
+     children	This is the total amount of time propagated into this
+		function by its children.
+
+     called	This is the number of times the function was called.
+		If the function called itself recursively, the number
+		only includes non-recursive calls, and is followed by
+		a `+' and the number of recursive calls.
+
+     name	The name of the current function.  The index number is
+		printed after it.  If the function is a member of a
+		cycle, the cycle number is printed between the
+		function's name and the index number.
+
+
+ For the function's parents, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the function into this parent.
+
+     children	This is the amount of time that was propagated from
+		the function's children into this parent.
+
+     called	This is the number of times this parent called the
+		function `/' the total number of times the function
+		was called.  Recursive calls to the function are not
+		included in the number after the `/'.
+
+     name	This is the name of the parent.  The parent's index
+		number is printed after it.  If the parent is a
+		member of a cycle, the cycle number is printed between
+		the name and the index number.
+
+ If the parents of the function cannot be determined, the word
+ `<spontaneous>' is printed in the `name' field, and all the other
+ fields are blank.
+
+ For the function's children, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the child into the function.
+
+     children	This is the amount of time that was propagated from the
+		child's children to the function.
+
+     called	This is the number of times the function called
+		this child `/' the total number of times the child
+		was called.  Recursive calls by the child are not
+		listed in the number after the `/'.
+
+     name	This is the name of the child.  The child's index
+		number is printed after it.  If the child is a
+		member of a cycle, the cycle number is printed
+		between the name and the index number.
+
+ If there are any cycles (circles) in the call graph, there is an
+ entry for the cycle-as-a-whole.  This entry shows who called the
+ cycle (as parents) and the members of the cycle (as children.)
+ The `+' recursive calls entry shows the number of function calls that
+ were internal to the cycle, and the calls entry for each member shows,
+ for that member, how many times it was called from other members of
+ the cycle.
+
+
+Index by function name
+
+   [2] test6()                [30] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI64_virt(long long&) [25] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldEnd_virt()
+   [3] void do_bench2<sax::old::TBufferTransport, sax::old::buffer>(apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>*, sax::old::TBufferTransport*) [31] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readBool_virt(bool&) [8] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldBegin_virt(std::string&, apache::thrift::protocol::TType&, short&)
+  [56] ComplexObj::read(apache::thrift::protocol::TProtocol*) [32] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readByte_virt(signed char&) [36] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldStop_virt()
+   [7] sax::old::TBufferTransport::write_virt(unsigned char const*, unsigned int) [21] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI16_virt(short) [24] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListBegin_virt(apache::thrift::protocol::TType, unsigned int)
+   [6] sax::old::TBufferTransport::readAll_virt(unsigned char*, unsigned int) [12] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI32_virt(int) [60] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructEnd_virt()
+  [57] sax::old::TBufferTransport::flush() [33] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeI64_virt(long long) [61] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructBegin_virt(std::string&)
+  [66] sax::old::TBufferTransport::~TBufferTransport() [34] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeBool_virt(bool) [10] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeFieldBegin_virt(char const*, apache::thrift::protocol::TType, short)
+  [63] sax::old::concurrent_queue<void*>::~concurrent_queue() [35] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeByte_virt(signed char) [62] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeStructBegin_virt(char const*)
+  [65] boost::detail::sp_counted_base::destroy() [20] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readDouble_virt(double&) [28] apache::thrift::transport::TTransport::borrow_virt(unsigned char*, unsigned int*)
+  [67] boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::dispose() [14] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readString_virt(std::string&) [5] ComplexObj::write(apache::thrift::protocol::TProtocol*) const
+  [68] boost::detail::sp_counted_impl_p<sax::old::TBufferTransport>::~sp_counted_impl_p() [58] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListEnd_virt() [64] std::vector<int, std::allocator<int> >::_M_insert_aux(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, int const&)
+  [69] boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::dispose() [22] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeDouble_virt(double) [29] std::vector<int, std::allocator<int> >::_M_fill_insert(__gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > >, unsigned int, int const&)
+  [70] boost::detail::sp_counted_impl_p<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport> >::~sp_counted_impl_p() [16] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeString_virt(std::string const&) [13] bool std::__equal<true>::equal<int>(int const*, int const*, int const*)
+  [18] apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::readStringBody(std::string&, int) [26] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readFieldEnd_virt() [9] _fu26___ZNSs4_Rep20_S_empty_rep_storageE
+  [71] apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>::~TBinaryProtocolT() [27] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::writeListEnd_virt() [15] _fu27___ZNSs4_Rep20_S_empty_rep_storageE
+  [19] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI16_virt(short&) [23] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readListBegin_virt(apache::thrift::protocol::TType&, unsigned int&) [1] _fu47___ZNSs4_Rep20_S_empty_rep_storageE
+  [11] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readI32_virt(int&) [59] apache::thrift::protocol::TVirtualProtocol<apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TTransport>, apache::thrift::protocol::TProtocolDefaults>::readStructEnd_virt() [17] _fu48___ZNSs4_Rep20_S_empty_rep_storageE

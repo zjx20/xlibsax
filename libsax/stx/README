@@ -1,0 +1,6 @@
+stx: stx-btree-0.8.3
+
+The STX B+ Tree package is a set of C++ template classes implementing
+a B+ tree key/data container in main memory.
+
+https://idlebox.net/2007/stx-btree/stx-btree-0.8.3/
