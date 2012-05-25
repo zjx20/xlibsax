@@ -152,7 +152,7 @@ int g_non_block_delayed(int got)
 #endif
 
 //-------------------------------------------------------------------------
-int g_tcp_listen(const char *addr, int port)
+int g_tcp_listen(const char *addr, int port, int backlog/* = 511*/)
 {
 	int ts, on = 1;
  	struct sockaddr_in sa;
@@ -173,8 +173,7 @@ int g_tcp_listen(const char *addr, int port)
 	
 	if (bind(ts, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
 	
-	// the magic constant 511 is from nginx
-	if (listen(ts, 511) != -1) return ts;
+	if (listen(ts, backlog) != -1) return ts;
 	
 quit:
 	CLOSE_SOCKET(ts); return -1;
@@ -194,11 +193,11 @@ int g_tcp_accept(int ts, char *ip, int *port)
 #endif
 			return -1;
 		}
-		// set linger, avoid TIME_WAIT state
-		lin.l_onoff=1;
-		lin.l_linger=0;
-		setsockopt(fd, SOL_SOCKET, SO_LINGER, 
-			(const char *) &lin, sizeof(lin));
+//		// set linger, avoid TIME_WAIT state
+//		lin.l_onoff=1;
+//		lin.l_linger=0;
+//		setsockopt(fd, SOL_SOCKET, SO_LINGER,
+//			(const char *) &lin, sizeof(lin));
 		
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, 
 			(const char *) &on, sizeof(on));
@@ -219,11 +218,11 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 		return -1;
 	}
 
-	// set linger, avoid TIME_WAIT state
-	lin.l_onoff=1;
-	lin.l_linger=0;
-	if (setsockopt(fd, SOL_SOCKET, SO_LINGER, 
-		(const char *) &lin, sizeof(lin)) == -1) goto quit;
+//	// set linger, avoid TIME_WAIT state
+//	lin.l_onoff=1;
+//	lin.l_linger=0;
+//	if (setsockopt(fd, SOL_SOCKET, SO_LINGER,
+//		(const char *) &lin, sizeof(lin)) == -1) goto quit;
 
 	if (non_block && g_set_non_block(fd) != 0) goto quit;
 
@@ -246,8 +245,8 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 	if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) return fd;
 
 #if !defined(WIN32) && !defined(_WIN32)
-	if (errno == 115 && non_block) return fd;
-#endif // EINPROGRESS = 115
+	if (errno == EINPROGRESS && non_block) return fd;
+#endif
 
 quit:
 	CLOSE_SOCKET(fd); return -1;
