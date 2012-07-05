@@ -36,18 +36,21 @@ int g_non_block_delayed(int got);
 #define EDA_WRITE 2
 #define EDA_ERROR 4
 
+const int EDA_ALL_MASK = (EDA_READ | EDA_WRITE | EDA_ERROR);
+
 typedef struct g_eda_t g_eda_t;
 
 typedef void g_eda_func(
-	g_eda_t *mgr, int fd, void *clientData, int mask);
+	g_eda_t* mgr, int fd, void* client_data, int mask);
 
-g_eda_t *g_eda_open(void);
-void g_eda_close(g_eda_t *mgr);
-int g_eda_add(g_eda_t *mgr, int fd, int mask, 
-	g_eda_func *proc, void *clientData);
-void g_eda_sub(g_eda_t *mgr, int fd, int mask);
-void g_eda_set(g_eda_t *mgr, int fd, int mask);
-int g_eda_loop(g_eda_t *mgr, int msec);
+g_eda_t* g_eda_open(int maxfds);
+void g_eda_close(g_eda_t* mgr);
+int g_eda_add(g_eda_t* mgr, int fd, int mask,
+	g_eda_func* proc, void* user_data);
+int g_eda_del(g_eda_t* mgr, int fd);
+void g_eda_sub(g_eda_t* mgr, int fd, int mask);
+void g_eda_set(g_eda_t* mgr, int fd, int mask);
+int g_eda_poll(g_eda_t* mgr, int msec);	// msec == -1 for wait forever
 
 #if defined(__cplusplus) || defined(c_plusplus)
 }
