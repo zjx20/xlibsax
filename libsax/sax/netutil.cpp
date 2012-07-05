@@ -278,7 +278,7 @@ uint64_t transport::listen(const char *spec, streamer *str)
 		3 == sscanf(spec, c_spec_fmt, proto, addr, &port))
 	{
 		if (strcmp(proto, "tcp") == 0) {
-			int fd = g_tcp_listen(addr, port);
+			int fd = g_tcp_listen(addr, port, 511);	// FIXME: magic number
 			if (fd < 0) return 0;
 			
 			if (g_set_non_block(fd) == 0) {

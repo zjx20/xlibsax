@@ -13,7 +13,7 @@ void g_net_clean();
 
 // addr == NULL for binding to 0.0.0.0
 // the magic constant 511 is from nginx
-int g_tcp_listen(const char *addr = NULL, int port, int backlog = 511);
+int g_tcp_listen(const char *addr, int port, int backlog);
 
 int g_tcp_accept(int ts, char *ip, int *port);
 int g_tcp_connect(const char *addr, int port, int non_block);

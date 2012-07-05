@@ -1921,14 +1921,12 @@ int g_load_avg(void)
 
 static int read_cpu_time(uint32_t t[4])
 {
-	char buf[1024], name[32];
+	int ret = 0;
 	FILE *fp = fopen("/proc/stat", "rb");
 	if (!fp) return 0;
-	fgets(buf, sizeof(buf), fp);
+	ret = (4 == fscanf(fp, "%*s%u%u%u%u", &t[0], &t[1], &t[2], &t[3]));
 	fclose(fp);
-
-	return (5==sscanf(buf, " %s %u %u %u %u",
-		name, &t[0], &t[1], &t[2], &t[3]));
+	return ret;
 }
 
 int g_cpu_usage(char tick[16], int *out)
