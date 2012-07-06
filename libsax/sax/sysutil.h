@@ -37,7 +37,7 @@ protected:
 private:
 	volatile long _stop_flag;
 	volatile long _num_alive;
-	static long proc(void *user);
+	static void* proc(void *user);
 };
 
 /// @brief a wrapper for Single Timer Wheel Timer

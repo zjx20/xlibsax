@@ -272,19 +272,22 @@ void g_mutex_leave(g_mutex_t *p);
 typedef void* g_thread_t;
 
 /// @brief (outer) create and start a thread.
-g_thread_t g_thread_start(long (*func)(void *), void *user);
+g_thread_t g_thread_start(void* (*func)(void *), void *user);
 
 /// @brief (outer) wait for the thread to finish.
 int g_thread_join(g_thread_t th, long *val);
 
 /// @brief (outer) create and start a detached thread.
-int g_thread_start_detached(long (*func)(void *), void *user);
+int g_thread_start_detached(void* (*func)(void *), void *user);
 
 /// @brief (inner) suspend execution of the current thread.
 int g_thread_sleep(double sec);
 
 /// @brief (inner) yield the processor from the running thread.
 void g_thread_yield();
+
+/// @brief (inner) put a pause instruction, hinting the processor that "this is a spin loop."
+void g_thread_pause();
 
 /// @brief (inner) terminate the running thread.
 void g_thread_exit(long val);

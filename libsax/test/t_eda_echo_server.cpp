@@ -29,7 +29,10 @@ void callback(g_eda_t *mgr, int fd, void *clientData, int mask)
     }
     else {
     	if(mask & EDA_ERROR) {
-			std::cout << "error happen.\n";
+			std::cout << "error happen\n";
+        	g_eda_del(mgr, fd);
+            g_tcp_close(fd);
+            std::cout << "client close." << std::endl;
 		}
         if (mask & EDA_READ) {
         	std::cout << "read event\n";

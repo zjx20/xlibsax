@@ -31,7 +31,7 @@ bool thread_mgr::is_stopped()
 	return _stop_flag;
 }
 
-long thread_mgr::proc(void *user)
+void* thread_mgr::proc(void *user)
 {
 	PRIV_INFO *info = (PRIV_INFO *) user;
 	thread_mgr *mgr = info->mgr_;
@@ -45,7 +45,7 @@ long thread_mgr::proc(void *user)
 	
 	g_lock_add((long *)&mgr->_num_alive, -1);
 	
-	return 0;
+	return (void*) 0;
 }
 
 int thread_mgr::run(int n)

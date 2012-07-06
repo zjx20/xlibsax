@@ -57,7 +57,7 @@ public:
 	sock_mgr(transport *owner, sax::stage *biz) : 
 		_owner(owner), _nio(NULL), _biz(biz)
 	{ 
-		_eda = g_eda_open();
+		_eda = g_eda_open(64*1024);
 		_alloc.init2(NULL, 64*1024); //max_conn=64K
 	}
 	~sock_mgr() { 
@@ -335,7 +335,7 @@ public:
 	virtual bool on_pump(double sec)
 	{
 		int msec = (int)(sec*1000 + 0.5);
-		g_eda_loop(_mgr->_eda, msec); 
+		g_eda_poll(_mgr->_eda, msec);
 		return true;
 	}
 	virtual void on_event(const sax::event_type *ev, int thread_id) 

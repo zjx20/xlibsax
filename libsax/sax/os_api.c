@@ -935,7 +935,7 @@ void g_mutex_leave(g_mutex_t *p)
 }
 
 // ################################################################
-g_thread_t g_thread_start(long (*func)(void *), void *user)
+g_thread_t g_thread_start(void* (*func)(void *), void *user)
 {
 	HANDLE h = CreateThread(NULL, 0,
 		(LPTHREAD_START_ROUTINE) func, user, 0, NULL);
@@ -955,7 +955,7 @@ int g_thread_join(g_thread_t th, long *ret)
 	CloseHandle(h); return 1;
 }
 
-int g_thread_start_detached(long (*func)(void *), void *user)
+int g_thread_start_detached(void* (*func)(void *), void *user)
 {
 	HANDLE h = CreateThread(NULL, 0,
 		(LPTHREAD_START_ROUTINE) func, user, 0, NULL);
@@ -972,6 +972,10 @@ int g_thread_sleep(double sec)
 }
 
 void g_thread_yield() {Sleep(0);}
+
+void g_thread_pause() {
+#warning "g_thread_pause() is not implemented."
+}
 
 void g_thread_exit(long ret) {ExitThread(ret);}
 
@@ -2129,11 +2133,10 @@ void g_mutex_leave(g_mutex_t *p)
 }
 
 // ################################################################
-g_thread_t g_thread_start(long (*func)(void *), void *user)
+g_thread_t g_thread_start(void* (*func)(void *), void *user)
 {
-	typedef void* (fx_t)(void *);
 	pthread_t id;
-	int i = pthread_create(&id, NULL, (fx_t *)func, user);
+	int i = pthread_create(&id, NULL, func, user);
 	return (i==0 ? (g_thread_t) id : NULL);
 }
 
@@ -2144,14 +2147,13 @@ int g_thread_join(g_thread_t th, long *ret)
 	return (pthread_join(id, (void **)ret)==0);
 }
 
-int g_thread_start_detached(long (*func)(void *), void *user)
+int g_thread_start_detached(void* (*func)(void *), void *user)
 {
-	typedef void* (fx_t)(void *);
-	pthread_attr_t	attr;
+	pthread_attr_t attr;
 	pthread_t id;
 	(void) pthread_attr_init(&attr);
 	(void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	return (0==pthread_create(&id, &attr, (fx_t *)func, user));
+	return (0==pthread_create(&id, &attr, func, user));
 }
 
 int g_thread_sleep(double sec)
@@ -2176,6 +2178,8 @@ int g_thread_sleep(double sec)
 }
 
 void g_thread_yield() {sched_yield();}
+
+void g_thread_pause() {asm ("pause");}
 
 void g_thread_exit(long ret) {pthread_exit((void *)ret);}
 

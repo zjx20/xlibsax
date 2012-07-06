@@ -391,18 +391,22 @@ int g_eda_add(g_eda_t* mgr, int fd, int mask,
 
 	epoll_event ee;
 	ee.events = 0;
-	if (mask & EDA_READ) ee.events |= EPOLLIN;
-	if (mask & EDA_WRITE) ee.events |= EPOLLOUT;
+	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
+	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
 	ee.data.ptr = mgr->items + fd;
 
-	return epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee);
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee) == 0 )) return 0;
+	perror("in g_eda_add() calling epoll_ctl()");
+	return -1;
 }
 
 int g_eda_del(g_eda_t* mgr, int fd)
 {
 	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask == EDA_NONE )) return -1;
 	mgr->items[fd].mask = EDA_NONE;
-	return epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL);
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL) == 0 )) return 0;
+	perror("in g_eda_del() calling epoll_ctl()");
+	return -1;
 }
 
 static void eda_mod_event(g_eda_t* mgr, int fd, int mask)
@@ -412,8 +416,11 @@ static void eda_mod_event(g_eda_t* mgr, int fd, int mask)
 	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
 	ee.data.ptr = mgr->items + fd;
-	if (epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) != -1) {
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) {
 		mgr->items[fd].mask = mask;
+	}
+	else {
+		perror("in eda_mod_event() calling epoll_ctl()");
 	}
 }
 
@@ -423,8 +430,9 @@ void g_eda_sub(g_eda_t* mgr, int fd, int mask)
 
 	int old_mask = mgr->items[fd].mask;
 	int new_mask = ((old_mask & (~mask)) & EDA_ALL_MASK);
-	if (UNLIKELY( new_mask == old_mask )) return;
-	else eda_mod_event(mgr, fd, new_mask);
+	if (LIKELY( new_mask != old_mask )) {
+		eda_mod_event(mgr, fd, new_mask);
+	}
 }
 
 void g_eda_set(g_eda_t* mgr, int fd, int mask)
@@ -432,8 +440,9 @@ void g_eda_set(g_eda_t* mgr, int fd, int mask)
 	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask == EDA_NONE )) return;
 
 	int new_mask = mask & EDA_ALL_MASK;
-	if (UNLIKELY( mgr->items[fd].mask == new_mask )) return;
-	else eda_mod_event(mgr, fd, new_mask);
+	if (LIKELY( mgr->items[fd].mask != new_mask )) {
+		eda_mod_event(mgr, fd, new_mask);
+	}
 }
 
 int g_eda_poll(g_eda_t* mgr, int msec)
