@@ -2358,21 +2358,188 @@ void g_share_unlock(g_share_t *s)
 	pthread_rwlock_unlock(&s->lock);
 }
 // ################################################################
-struct g_atom_t {
-	int32_t sem; ///< semaphore
-	volatile int32_t  wc; ///< count of writers
-	volatile int32_t  rc; ///< count of readers
+struct g_spin_t {
+	volatile int32_t sem;	///< semaphore
+	volatile int32_t w;		///< writers need lock
 };
 
-void g_atom_enter(g_atom_t *s)
+#define SPIN_PURE_LOCK_VALUE		0x40000000
+#define SPIN_RWLOCK_LOCK_FLAG		0x20000000
+#define SPIN_RWLOCK_LOCK_VALUE		SPIN_RWLOCK_LOCK_FLAG
+#define SPIN_WRITER_FIRST_FLAG		0x40000000
+
+g_spin_t *g_spin_init(spin_type type)
 {
-	while (!__sync_bool_compare_and_swap(
-		&s->sem, 0, 1)) sched_yield();
+	g_spin_t* s = malloc(sizeof(g_spin_t));
+	if (s == NULL) return NULL;
+
+	memset(s, 0, sizeof(g_spin_t));
+
+	if (type == PURE) {
+		// only g_spin_enter() and g_spin_leave() can process with this value
+		// in the meanwhile, g_spin_enter() and g_spin_leave() will not work well without it
+		s->sem = SPIN_PURE_LOCK_VALUE;
+	}
+	else if (type == RWLOCK_WRITER_FIRST) {
+		s->w = SPIN_WRITER_FIRST_FLAG;
+	}
+
+	return s;
 }
 
-void g_atom_leave(g_atom_t *s)
+void g_spin_free(g_spin_t *a)
 {
-	(void)__sync_lock_test_and_set(&s->sem, 0);
+	assert(a);
+	assert(a->sem == 0 || a->sem == SPIN_PURE_LOCK_VALUE);
+	assert((a->w & ~SPIN_WRITER_FIRST_FLAG) == 0);
+	free(a);
+}
+
+#define SPIN_TRYLOCK(s, unlock, lock) \
+	(s->sem == 0 && __sync_bool_compare_and_swap(&s->sem, unlock, lock))
+
+#define SPIN_UNLOCK(s, lock, unlock) \
+	(s->sem == 0 && __sync_bool_compare_and_swap(&s->sem, lock, unlock))
+
+#define SPIN_PURE_TRYLOCK(s) SPIN_TRYLOCK(s, SPIN_PURE_LOCK_VALUE, SPIN_PURE_LOCK_VALUE + 1)
+#define SPIN_PURE_UNLOCK(s) SPIN_UNLOCK(s, SPIN_PURE_LOCK_VALUE + 1, SPIN_PURE_LOCK_VALUE)
+
+#define SPIN(s, spin, cond, ret)			\
+	do {									\
+		int n, i;							\
+		ret = 0;							\
+		for (n = 1; n < spin; n <<= 1) {	\
+			for (i = 0; i < n; i++) {		\
+				g_thread_pause();			\
+			}								\
+			if (cond) {						\
+				ret = 1;					\
+				break;						\
+			}								\
+			g_thread_yield();				\
+		}									\
+	} while(0)
+
+
+void g_spin_enter(g_spin_t *s, int spin)
+{
+	int spin_ret;
+	while (!SPIN_PURE_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_PURE_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+	}
+}
+
+void g_spin_leave(g_spin_t *s)
+{
+	SPIN_PURE_UNLOCK(s);
+}
+
+#define SPIN_WRITER_TRYLOCK(s) SPIN_TRYLOCK(s, 0, SPIN_RWLOCK_LOCK_VALUE)
+#define SPIN_WRITER_UNLOCK(s) SPIN_UNLOCK(s, SPIN_RWLOCK_LOCK_VALUE, 0)
+
+void g_spin_lockw(g_spin_t *s, int spin)
+{
+	if (SPIN_WRITER_TRYLOCK(s)) return;
+	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_add_and_fetch(&s->w, 1);
+
+	int spin_ret;
+	while (!SPIN_WRITER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_WRITER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+	}
+
+	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_sub_and_fetch(&s->w, 1);
+}
+
+int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
+{
+	if (sec <= 0) {
+		return SPIN_WRITER_TRYLOCK(s) ? 0 : 1;
+	}
+
+	if (SPIN_WRITER_TRYLOCK(s)) return 0;
+	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_add_and_fetch(&s->w, 1);
+
+	int ret = 0;
+	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
+
+	int spin_ret;
+	while (!SPIN_WRITER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_WRITER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		if (g_now_us() > limit) { ret = 1; break; }
+	}
+
+	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_sub_and_fetch(&s->w, 1);
+
+	return ret;
+}
+
+void g_spin_unlockw(g_spin_t *s)
+{
+	SPIN_UNLOCK(s, SPIN_RWLOCK_LOCK_VALUE, 0);
+}
+
+#define SPIN_READER_TRYLOCK(s) \
+	/* writer first */	\
+	( (s->w <= 0) && \
+	/* already allocated by a writer */	\
+	(__sync_fetch_and_or(&s->sem, SPIN_RWLOCK_LOCK_FLAG) != SPIN_RWLOCK_LOCK_VALUE) && \
+	/* add reader counter, always greater than 0 */	\
+	(__sync_add_and_fetch(&s->sem, 1)) )
+
+#define SPIN_READER_UNLOCK(s) \
+	/* the final reader release the lock */	\
+	if (__sync_sub_and_fetch(&s->sem, 1) == SPIN_RWLOCK_LOCK_VALUE) {	\
+		/* release for writer */	\
+		__sync_bool_compare_and_swap(&s->sem, SPIN_RWLOCK_LOCK_VALUE, 0);	\
+	}
+
+
+//static int spin_read_trylock(g_spin_t* s) {
+//	if (s->w > 0) return 0;
+//	int ori_sem = __sync_fetch_and_or(&s->sem, SPIN_RWLOCK_LOCK_FLAG);
+//	if (ori_sem != SPIN_RWLOCK_LOCK_VALUE) {
+//		__sync_add_and_fetch(&s->w, 1);
+//		return 1;
+//	}
+//	return 0;
+//}
+
+void g_spin_lockr(g_spin_t *s, int spin)
+{
+	int spin_ret;
+	while (!SPIN_READER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_READER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+	}
+}
+
+int g_spin_try_lockr(g_spin_t *s, double sec, int spin)
+{
+	if (sec <= 0) {
+		return SPIN_READER_TRYLOCK(s) ? 0 : 1;
+	}
+
+	if (SPIN_READER_TRYLOCK(s)) return 0;
+
+	int ret = 0;
+	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
+
+	int spin_ret;
+	while (!SPIN_READER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_READER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		if (g_now_us() > limit) { ret = 1; break; }
+	}
+
+	return ret;
+}
+
+void g_spin_unlockr(g_spin_t *s)
+{
+	SPIN_READER_UNLOCK(s);
 }
 
 // ################################################################
@@ -2867,98 +3034,6 @@ void g_localtime(const void *_sec, void *_tp, long offset)
 	tp->tm_mon = y;
 	tp->tm_mday = days + 1;
 	tp->tm_isdst = 0;
-}
-
-g_atom_t *g_atom_init(void)
-{
-	return (g_atom_t *) calloc(1, sizeof(g_atom_t));
-}
-
-void g_atom_free(g_atom_t *a)
-{
-	assert(a);
-	assert(a->sem==0);
-	assert(a->wc==0);
-	assert(a->rc==0);
-	free(a);
-}
-
-void g_atom_lockw(g_atom_t *s)
-{
-	g_atom_enter(s);
-	while (s->wc > 0 || s->rc > 0)
-	{
-		g_atom_leave(s);
-		g_thread_yield();
-		g_atom_enter(s);
-	}
-	s->wc++;
-	g_atom_leave(s);
-}
-
-int g_atom_try_lockw(g_atom_t *s, double sec)
-{
-	int ret = 0;
-	g_atom_enter(s);
-	if (sec <= 0) {
-		if (!s->wc && !s->rc) {s->wc++; ret=1;}
-	}
-	else {
-		int64_t ticks = (int64_t)(sec*1000000);
-		int64_t limit = ticks + g_now_us();
-		for (;;) {
-			if (!s->wc && !s->rc) {s->wc++; ret=1; break;}
-			g_atom_leave(s);
-			if (g_now_us() > limit) return 0;
-			g_thread_yield();
-			g_atom_enter(s);
-		}
-	}
-	g_atom_leave(s);
-	return ret;
-}
-
-void g_atom_lockr(g_atom_t *s)
-{
-	g_atom_enter(s);
-	while (s->wc > 0) {
-		g_atom_leave(s);
-		g_thread_yield();
-		g_atom_enter(s);
-	}
-	s->rc++;
-	g_atom_leave(s);
-}
-
-
-int g_atom_try_lockr(g_atom_t *s, double sec)
-{
-	int ret = 0;
-	g_atom_enter(s);
-	if (sec <= 0) {
-		if (!s->wc) {s->rc++; ret=1;}
-	}
-	else {
-		int64_t ticks = (int64_t)(sec*1000000);
-		int64_t limit = ticks + g_now_us();
-		for (;;) {
-			if (!s->wc) {s->rc++; ret=1; break;}
-			g_atom_leave(s);
-			if (g_now_us() > limit) return 0;
-			g_thread_yield();
-			g_atom_enter(s);
-		}
-	}
-	g_atom_leave(s);
-	return ret;
-}
-
-void g_atom_unlock(g_atom_t *s)
-{
-	g_atom_enter(s);
-	if (s->wc > 0) s->wc--;
-	else s->rc--;
-	g_atom_leave(s);
 }
 
 //-------------------------------------------------------------------------

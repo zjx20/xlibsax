@@ -10,7 +10,7 @@
 ///  -# g_mutex_t: mutex object for thread
 ///  -# g_thread_t: lightweighed thread object
 ///  -# g_share_t: R/W locker for thread
-///  -# g_atom_t: R/W locker based on atom
+///  -# g_spin_t: R/W locker based on atomic operators
 ///  -# g_cond_t: condition object for thread
 /// 
 /// Three types of IO interfaces are designed for different tasks:
@@ -239,7 +239,7 @@ int g_flock2(void* fp, int op);
 
 
 //-------------------------------------------------------------------------
-//-------- (d) API for thread/mutex/atom/semp/condition objects -----------
+//-------- (d) API for thread/mutex/spin/semp/condition objects -----------
 //-------------------------------------------------------------------------
 typedef struct g_mutex_t g_mutex_t;
 
@@ -340,32 +340,39 @@ int  g_share_try_lockr(g_share_t *s, double sec);
 void g_share_unlock(g_share_t *s);
 
 //-------------------------------------------------------------------------
-typedef struct g_atom_t g_atom_t;
+typedef struct g_spin_t g_spin_t;
 
-/// @brief lock a atom lock
-void g_atom_enter(g_atom_t *a);
+typedef enum {
+	PURE = 1,	/* work with g_spin_enter() / g_spin_leave() pair */
 
-/// @brief release a atom lock
-void g_atom_leave(g_atom_t *a);
-
+	/* work with g_spin_lock() / g_spin_unlock() serials */
+	RWLOCK_READER_FIRST = 2,
+	RWLOCK_WRITER_FIRST = 4
+} spin_type;
 
 /// @brief initialize
-g_atom_t *g_atom_init(void);
+g_spin_t *g_spin_init(spin_type type);
 
 /// @brief deconstruct
-void g_atom_free(g_atom_t *a);
+void g_spin_free(g_spin_t *a);
 
+/// @brief lock a spin lock
+void g_spin_enter(g_spin_t *a, int spin);
+
+/// @brief release a spin lock
+void g_spin_leave(g_spin_t *a);
 
 /// @brief try to get a writer lock.
-void g_atom_lockw(g_atom_t *s);
-int  g_atom_try_lockw(g_atom_t *s, double sec);
+void g_spin_lockw(g_spin_t *s, int spin);
+int  g_spin_try_lockw(g_spin_t *s, double sec, int spin);
 
 /// @brief try to get a reader lock.
-void g_atom_lockr(g_atom_t *s);
-int  g_atom_try_lockr(g_atom_t *s, double sec);
+void g_spin_lockr(g_spin_t *s, int spin);
+int  g_spin_try_lockr(g_spin_t *s, double sec, int spin);
 
 /// @brief release the lock.
-void g_atom_unlock(g_atom_t *s);
+void g_spin_unlockw(g_spin_t *s);
+void g_spin_unlockr(g_spin_t *s);
 
 //-------------------------------------------------------------------------
 
