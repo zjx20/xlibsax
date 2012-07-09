@@ -2366,7 +2366,7 @@ struct g_spin_t {
 #define SPIN_PURE_LOCK_VALUE		0x40000000
 #define SPIN_RWLOCK_LOCK_FLAG		0x20000000
 #define SPIN_RWLOCK_LOCK_VALUE		SPIN_RWLOCK_LOCK_FLAG
-#define SPIN_WRITER_FIRST_FLAG		0x40000000
+#define SPIN_PREFER_WRITER_FLAG		0x40000000
 
 g_spin_t *g_spin_init(spin_type type)
 {
@@ -2380,8 +2380,8 @@ g_spin_t *g_spin_init(spin_type type)
 		// in the meanwhile, g_spin_enter() and g_spin_leave() will not work well without it
 		s->sem = SPIN_PURE_LOCK_VALUE;
 	}
-	else if (type == RWLOCK_WRITER_FIRST) {
-		s->w = SPIN_WRITER_FIRST_FLAG;
+	else if (type == RWLOCK_PREFER_WRITER) {
+		s->w = SPIN_PREFER_WRITER_FLAG;
 	}
 
 	return s;
@@ -2391,15 +2391,15 @@ void g_spin_free(g_spin_t *a)
 {
 	assert(a);
 	assert(a->sem == 0 || a->sem == SPIN_PURE_LOCK_VALUE);
-	assert((a->w & ~SPIN_WRITER_FIRST_FLAG) == 0);
+	assert((a->w & ~SPIN_PREFER_WRITER_FLAG) == 0);
 	free(a);
 }
 
 #define SPIN_TRYLOCK(s, unlock, lock) \
-	(s->sem == 0 && __sync_bool_compare_and_swap(&s->sem, unlock, lock))
+	(s->sem == unlock && __sync_bool_compare_and_swap(&s->sem, unlock, lock))
 
 #define SPIN_UNLOCK(s, lock, unlock) \
-	(s->sem == 0 && __sync_bool_compare_and_swap(&s->sem, lock, unlock))
+	(__sync_bool_compare_and_swap(&s->sem, lock, unlock))
 
 #define SPIN_PURE_TRYLOCK(s) SPIN_TRYLOCK(s, SPIN_PURE_LOCK_VALUE, SPIN_PURE_LOCK_VALUE + 1)
 #define SPIN_PURE_UNLOCK(s) SPIN_UNLOCK(s, SPIN_PURE_LOCK_VALUE + 1, SPIN_PURE_LOCK_VALUE)
@@ -2441,7 +2441,7 @@ void g_spin_leave(g_spin_t *s)
 void g_spin_lockw(g_spin_t *s, int spin)
 {
 	if (SPIN_WRITER_TRYLOCK(s)) return;
-	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_add_and_fetch(&s->w, 1);
+	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_add_and_fetch(&s->w, 1);
 
 	int spin_ret;
 	while (!SPIN_WRITER_TRYLOCK(s)) {
@@ -2449,7 +2449,7 @@ void g_spin_lockw(g_spin_t *s, int spin)
 		if (spin_ret) break;
 	}
 
-	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_sub_and_fetch(&s->w, 1);
+	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_sub_and_fetch(&s->w, 1);
 }
 
 int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
@@ -2459,7 +2459,7 @@ int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
 	}
 
 	if (SPIN_WRITER_TRYLOCK(s)) return 0;
-	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_add_and_fetch(&s->w, 1);
+	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_add_and_fetch(&s->w, 1);
 
 	int ret = 0;
 	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
@@ -2471,7 +2471,7 @@ int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
 		if (g_now_us() > limit) { ret = 1; break; }
 	}
 
-	if (s->w & SPIN_WRITER_FIRST_FLAG) __sync_sub_and_fetch(&s->w, 1);
+	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_sub_and_fetch(&s->w, 1);
 
 	return ret;
 }
@@ -2482,11 +2482,12 @@ void g_spin_unlockw(g_spin_t *s)
 }
 
 #define SPIN_READER_TRYLOCK(s) \
-	/* writer first */	\
-	( (s->w <= 0) && \
-	/* already allocated by a writer */	\
+	/* if prefer reader, than s->w == 0;
+	 * otherwise, s->w > SPIN_PREFER_WRITER_FLAG if writer got the lock */	\
+	( (s->w <= SPIN_PREFER_WRITER_FLAG) && \
+	/* check whether the lock was already allocated by a writer */	\
 	(__sync_fetch_and_or(&s->sem, SPIN_RWLOCK_LOCK_FLAG) != SPIN_RWLOCK_LOCK_VALUE) && \
-	/* add reader counter, always greater than 0 */	\
+	/* add reader counter, the return value always greater than 0 */	\
 	(__sync_add_and_fetch(&s->sem, 1)) )
 
 #define SPIN_READER_UNLOCK(s) \

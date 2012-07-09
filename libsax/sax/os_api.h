@@ -346,8 +346,8 @@ typedef enum {
 	PURE = 1,	/* work with g_spin_enter() / g_spin_leave() pair */
 
 	/* work with g_spin_lock() / g_spin_unlock() serials */
-	RWLOCK_READER_FIRST = 2,
-	RWLOCK_WRITER_FIRST = 4
+	RWLOCK_PREFER_READER = 2,
+	RWLOCK_PREFER_WRITER = 4
 } spin_type;
 
 /// @brief initialize

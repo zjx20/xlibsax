@@ -104,24 +104,24 @@ private:
 	g_share_t *_pi;
 };
 
-/// an inline-wrapper for g_atom_t
-class atom_type
-{
-public:
-	friend class auto_rwlock;
-	inline  atom_type() {_pi=g_atom_init();}
-	inline ~atom_type() {g_atom_free(_pi);}
-	inline void enter() {g_atom_enter(_pi);}
-	inline void leave() {g_atom_leave(_pi);}
-	
-	inline void lockw() {g_atom_lockw(_pi);}
-	inline int try_lockw(double sec) {return g_atom_try_lockw(_pi, sec);}
-	inline void lockr() {g_atom_lockr(_pi);}
-	inline int try_lockr(double sec) {return g_atom_try_lockr(_pi, sec);}
-	inline void unlock() {g_atom_unlock(_pi);}
-private:
-	g_atom_t *_pi;
-};
+///// an inline-wrapper for g_atom_t
+//class atom_type
+//{
+//public:
+//	friend class auto_rwlock;
+//	inline  atom_type() {_pi=g_atom_init();}
+//	inline ~atom_type() {g_atom_free(_pi);}
+//	inline void enter() {g_atom_enter(_pi);}
+//	inline void leave() {g_atom_leave(_pi);}
+//
+//	inline void lockw() {g_atom_lockw(_pi);}
+//	inline int try_lockw(double sec) {return g_atom_try_lockw(_pi, sec);}
+//	inline void lockr() {g_atom_lockr(_pi);}
+//	inline int try_lockr(double sec) {return g_atom_try_lockr(_pi, sec);}
+//	inline void unlock() {g_atom_unlock(_pi);}
+//private:
+//	g_atom_t *_pi;
+//};
 
 /// an inline-wrapper for g_sema_t
 class sema_type
@@ -180,33 +180,33 @@ private:
 	g_mutex_t *_mtx; ///> holding the g_mutex_t handle.
 };
 
-// rwlock based on g_atom_xxx:
-class auto_rwlock
-{
-public:
-	inline auto_rwlock(g_atom_t *at, int ex) : _at(at)
-	{
-		if (_at) {
-			if (ex) g_atom_lockw(_at);
-			else    g_atom_lockr(_at);
-		}
-	}
-
-	inline auto_rwlock(atom_type *p, int ex) : _at(p->_pi)
-	{
-		if (_at) {
-			if (ex) g_atom_lockw(_at);
-			else    g_atom_lockr(_at);
-		}
-	}
-
-	/// @brief using deconstructor to unlock a file.
-	inline ~auto_rwlock() {
-		if (_at) g_atom_unlock(_at);
-	}
-private:
-	g_atom_t *_at; ///> a pointer holding the g_atom_t handle.
-};
+//// rwlock based on g_atom_xxx:
+//class auto_rwlock
+//{
+//public:
+//	inline auto_rwlock(g_atom_t *at, int ex) : _at(at)
+//	{
+//		if (_at) {
+//			if (ex) g_atom_lockw(_at);
+//			else    g_atom_lockr(_at);
+//		}
+//	}
+//
+//	inline auto_rwlock(atom_type *p, int ex) : _at(p->_pi)
+//	{
+//		if (_at) {
+//			if (ex) g_atom_lockw(_at);
+//			else    g_atom_lockr(_at);
+//		}
+//	}
+//
+//	/// @brief using deconstructor to unlock a file.
+//	inline ~auto_rwlock() {
+//		if (_at) g_atom_unlock(_at);
+//	}
+//private:
+//	g_atom_t *_at; ///> a pointer holding the g_atom_t handle.
+//};
 
 // rwlock based on g_share_xxx:
 class share_rwlock
