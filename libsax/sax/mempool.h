@@ -21,7 +21,7 @@ long g_fsb_needed(long block_size, int block_count);
 long g_fsb_available(long total, long block_size);
 
 struct fsb_pool_t *g_fsb_init(
-	void *addr, long tatal, long block_size, int block_count);
+	void *addr, long total, long block_size, int block_count);
 void* g_fsb_alloc(struct fsb_pool_t *pool);
 int g_fsb_free(struct fsb_pool_t *pool, void *block);
 

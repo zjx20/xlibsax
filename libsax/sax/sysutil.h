@@ -73,6 +73,15 @@ private:
 	static void proc(uint32_t id, void *client, void *param);
 };
 
+class dummy_lock
+{
+public:
+	inline dummy_lock() {}
+	inline ~dummy_lock() {}
+	inline void enter() {}
+	inline void leave() {}
+};
+
 /// an inline-wrapper for g_mutex_t
 class mutex_type
 {
@@ -104,24 +113,19 @@ private:
 	g_share_t *_pi;
 };
 
-///// an inline-wrapper for g_atom_t
-//class atom_type
-//{
-//public:
-//	friend class auto_rwlock;
-//	inline  atom_type() {_pi=g_atom_init();}
-//	inline ~atom_type() {g_atom_free(_pi);}
-//	inline void enter() {g_atom_enter(_pi);}
-//	inline void leave() {g_atom_leave(_pi);}
-//
-//	inline void lockw() {g_atom_lockw(_pi);}
-//	inline int try_lockw(double sec) {return g_atom_try_lockw(_pi, sec);}
-//	inline void lockr() {g_atom_lockr(_pi);}
-//	inline int try_lockr(double sec) {return g_atom_try_lockr(_pi, sec);}
-//	inline void unlock() {g_atom_unlock(_pi);}
-//private:
-//	g_atom_t *_pi;
-//};
+/// an inline-wrapper for g_spin_t
+class spin_type
+{
+public:
+	friend class auto_rwlock;
+	inline  spin_type(int spin_times = 16) {_pi=g_spin_init(PURE); _spin_times = spin_times;}
+	inline ~spin_type() {g_spin_free(_pi);}
+	inline void enter() {g_spin_enter(_pi, _spin_times);}
+	inline void leave() {g_spin_leave(_pi);}
+private:
+	g_spin_t *_pi;
+	int _spin_times;
+};
 
 /// an inline-wrapper for g_sema_t
 class sema_type
@@ -153,6 +157,30 @@ private:
 };
 
 /**
+* @brief a simple class encapsulating lock/unlock among threads
+*        support mutex_type, spin_type and dummy_lock
+*/
+template <typename T>
+class auto_lock
+{
+public:
+	inline auto_lock(T& lock) : _lock(lock) {
+		_lock.enter();
+	}
+
+	inline auto_lock(T* lock) : _lock(*lock) {
+		_lock.enter();
+	}
+
+	inline ~auto_lock() {
+		_lock.leave();
+	}
+
+private:
+	T& _lock;
+};
+
+/**
 * @brief a simple class encapsulating mutex lock/unlock among threads
 * @see g_mutex_enter(), g_mutex_leave().
 */
@@ -179,34 +207,6 @@ public:
 private:
 	g_mutex_t *_mtx; ///> holding the g_mutex_t handle.
 };
-
-//// rwlock based on g_atom_xxx:
-//class auto_rwlock
-//{
-//public:
-//	inline auto_rwlock(g_atom_t *at, int ex) : _at(at)
-//	{
-//		if (_at) {
-//			if (ex) g_atom_lockw(_at);
-//			else    g_atom_lockr(_at);
-//		}
-//	}
-//
-//	inline auto_rwlock(atom_type *p, int ex) : _at(p->_pi)
-//	{
-//		if (_at) {
-//			if (ex) g_atom_lockw(_at);
-//			else    g_atom_lockr(_at);
-//		}
-//	}
-//
-//	/// @brief using deconstructor to unlock a file.
-//	inline ~auto_rwlock() {
-//		if (_at) g_atom_unlock(_at);
-//	}
-//private:
-//	g_atom_t *_at; ///> a pointer holding the g_atom_t handle.
-//};
 
 // rwlock based on g_share_xxx:
 class share_rwlock

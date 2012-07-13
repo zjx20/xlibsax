@@ -1,6 +1,6 @@
 #include "os_api.h"
 #include "os_net.h"
-#include "c++/linklist.h"
+#include "c++/linkedlist.h"
 #include "netutil.h"
 
 #include <string.h>
@@ -110,7 +110,7 @@ private:
 	sax::stage *_nio;
 	struct g_eda_t *_eda;
 	sax::stage *_biz;
-	linklist<connection> _alive;
+	linkedlist<connection> _alive;
 	spool<connection> _alloc;
 
 protected:

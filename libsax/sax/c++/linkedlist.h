@@ -1,5 +1,5 @@
-#ifndef __LINK_LIST_H__
-#define __LINK_LIST_H__
+#ifndef __LINKED_LIST_H__
+#define __LINKED_LIST_H__
 
 #include "nocopy.h"
 
@@ -14,18 +14,18 @@ namespace sax {
 /// </pre>
 
 template <typename NodeT>
-class linklist : public nocopy
+class linkedlist : public nocopy
 {
 public:
-	typedef linklist<NodeT> self_type;
+	typedef linkedlist<NodeT> self_type;
 	typedef NodeT * node_pointer;
 	
-	linklist();
+	linkedlist();
 	void push_back(NodeT* node);
 	void push_front(NodeT* node);
 	void erase(NodeT* node);
 	void splice(bool before, NodeT *dst, NodeT *src);
-	void merge(const linklist<NodeT>& al);
+	void merge(const linkedlist<NodeT>& al);
 	void merge(NodeT *head);
 
 	NodeT* head() const { return _head; }
@@ -42,19 +42,19 @@ private:
 };
 
 template <typename NodeT>
-linklist<NodeT>::linklist()
+linkedlist<NodeT>::linkedlist()
 {
 	reset();
 }
 
 template <typename NodeT>
-void linklist<NodeT>::reset()
+void linkedlist<NodeT>::reset()
 {
 	_head = _tail = 0;
 }
 
 template <typename NodeT>
-void linklist<NodeT>::push_back(NodeT* node)
+void linkedlist<NodeT>::push_back(NodeT* node)
 {
 	if (!node) return;
 
@@ -71,7 +71,7 @@ void linklist<NodeT>::push_back(NodeT* node)
 }
 
 template <typename NodeT>
-void linklist<NodeT>::push_front(NodeT* node)
+void linkedlist<NodeT>::push_front(NodeT* node)
 {
 	if (!node) return;
 
@@ -88,7 +88,7 @@ void linklist<NodeT>::push_front(NodeT* node)
 }
 
 template <typename NodeT>
-void linklist<NodeT>::erase(NodeT* node)
+void linkedlist<NodeT>::erase(NodeT* node)
 {
 	if (!node) return;
 
@@ -107,7 +107,7 @@ void linklist<NodeT>::erase(NodeT* node)
 }
 
 template <typename NodeT>
-void linklist<NodeT>::splice(bool before, NodeT *where, NodeT *node)
+void linkedlist<NodeT>::splice(bool before, NodeT *where, NodeT *node)
 {
 	if (empty() || !where || !node || where == node) return;
 	
@@ -140,7 +140,7 @@ void linklist<NodeT>::splice(bool before, NodeT *where, NodeT *node)
 }
 
 template <typename NodeT>
-void linklist<NodeT>::merge(const linklist<NodeT>& al)
+void linkedlist<NodeT>::merge(const linkedlist<NodeT>& al)
 {
 	if (al.empty()) return;
 
@@ -155,7 +155,7 @@ void linklist<NodeT>::merge(const linklist<NodeT>& al)
 }
 
 template <typename NodeT>
-void linklist<NodeT>::merge(NodeT *head)
+void linkedlist<NodeT>::merge(NodeT *head)
 {
 	if (!head) return;
 
@@ -177,5 +177,5 @@ void linklist<NodeT>::merge(NodeT *head)
 
 } //namespace
 
-#endif//__LINK_LIST_H__
+#endif//__LINKED_LIST_H__
 

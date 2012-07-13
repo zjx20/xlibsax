@@ -1,6 +1,8 @@
 #include "mempool.h"
 #include <string.h>
 
+#include "os_api.h"
+
 /** 
  * @file mempool.c
  * -# SLAB memory allocator, ported from nginx
@@ -816,5 +818,4 @@ void* g_fsb_getblock(struct fsb_pool_t *pool, uint64_t key)
 	}
 	return NULL;
 }
-
 
