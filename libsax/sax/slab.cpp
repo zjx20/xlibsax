@@ -15,12 +15,14 @@ void slab_mgr::register_slab(slab_t* slab)
 {
 	auto_lock<spin_type> scoped_lock(_lock);
 	_slab_list.push_back(slab);
+	_slabs_size += 1;
 }
 
 void slab_mgr::unregister_slab(slab_t* slab)
 {
 	auto_lock<spin_type> scoped_lock(_lock);
 	_slab_list.erase(slab);
+	_slabs_size -= 1;
 }
 
 void slab_mgr::shrink_slabs(double keep/* = 0.9*/)
@@ -40,7 +42,6 @@ slab_t::slab_t(size_t size)
 	_total_amount = 0;
 	_shrink_amount = 0;
 	_alloc_size = size > sizeof(fake_node_t) ? size : sizeof(fake_node_t);
-	_malloc_times = 0;
 	_next = NULL;
 	_prev = NULL;
 
@@ -65,10 +66,8 @@ void slab_t::shrink(double keep)
 {
 	assert(keep <= 1.0);
 	auto_lock<spin_type> scoped_lock(_lock);
-	if (_malloc_times == 0) {
-		_shrink_amount = (size_t) (_total_amount * (1.0 - keep));
-	}
-	_malloc_times = 0;
+	_shrink_amount = _total_amount - (size_t) (_total_amount * keep);
+	if (_shrink_amount > _list_length) _shrink_amount = _list_length;
 }
 
 void* slab_t::alloc()
@@ -83,7 +82,6 @@ void* slab_t::alloc()
 	else {
 		void* ret = malloc(_alloc_size);
 		if (ret) {
-			_malloc_times += 1;
 			_total_amount += 1;
 		}
 		return ret;

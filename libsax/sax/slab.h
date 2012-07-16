@@ -39,7 +39,6 @@ public:
 	inline size_t get_total_amount() {return _total_amount;}
 	inline size_t get_shrink_amount() {return _shrink_amount;}
 	inline size_t get_alloc_size() {return _alloc_size;}
-	inline size_t get_malloc_times() {return _malloc_times;}
 
 private:
 	linkedlist<fake_node_t> _free_list;
@@ -47,7 +46,6 @@ private:
 	size_t _total_amount;
 	size_t _shrink_amount;
 	size_t _alloc_size;
-	size_t _malloc_times;
 	spin_type _lock;
 
 	// declare for linkedlist
@@ -61,20 +59,25 @@ class slab_mgr
 {
 	friend class slab_t;
 
+public:
 	static slab_mgr* get_instance();
 
 	// try to shrunk every slab
 	void shrink_slabs(double keep = 0.9);
 
+	// for test
+	inline size_t get_slabs_size() {return _slabs_size;}
+
 private:
 
-	slab_mgr() {}
+	slab_mgr() {_slabs_size = 0;}
 
 	void register_slab(slab_t* slab);
-	void unregister_slab(slab_t* slab);	// linear time algorithm
+	void unregister_slab(slab_t* slab);
 
 	spin_type _lock;
 	linkedlist<slab_t> _slab_list;
+	size_t _slabs_size;
 };
 
 /*********************************************************************/
