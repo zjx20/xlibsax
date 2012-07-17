@@ -2405,7 +2405,7 @@ static void check_spin(g_spin_t* s)
 #endif
 
 
-g_spin_t *g_spin_init(spin_type type)
+g_spin_t* g_spin_init(spin_type type)
 {
 	g_spin_t* s = malloc(sizeof(g_spin_t));
 	if (s == NULL) return NULL;
@@ -2424,7 +2424,7 @@ g_spin_t *g_spin_init(spin_type type)
 	return s;
 }
 
-void g_spin_free(g_spin_t *s)
+void g_spin_free(g_spin_t* s)
 {
 	assert(s);
 	assert(s->sem == 0 || s->sem == SPIN_PURE_LOCK_VALUE);
@@ -2455,7 +2455,7 @@ void g_spin_free(g_spin_t *s)
 
 #define SPIN_PURE_UNLOCK(s) s->sem = SPIN_PURE_LOCK_VALUE
 
-void g_spin_enter(g_spin_t *s, int spin)
+void g_spin_enter(g_spin_t* s, int spin)
 {
 	int spin_ret;
 	while (!SPIN_PURE_TRYLOCK(s)) {
@@ -2467,7 +2467,7 @@ void g_spin_enter(g_spin_t *s, int spin)
 	SPIN_DEBUG_INC_WRITER(s);
 }
 
-void g_spin_leave(g_spin_t *s)
+void g_spin_leave(g_spin_t* s)
 {
 	SPIN_DEBUG_DEC_WRITER(s);
 
@@ -2480,7 +2480,7 @@ void g_spin_leave(g_spin_t *s)
 
 #define SPIN_WRITER_UNLOCK(s) (__sync_and_and_fetch(&s->sem, ~SPIN_RWLOCK_LOCK_FLAG))
 
-void g_spin_lockw(g_spin_t *s, int spin)
+void g_spin_lockw(g_spin_t* s, int spin)
 {
 	if (SPIN_WRITER_TRYLOCK(s)) return;
 	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_add_and_fetch(&s->w, 1);
@@ -2497,7 +2497,7 @@ void g_spin_lockw(g_spin_t *s, int spin)
 	SPIN_DEBUG_INC_WRITER(s);
 }
 
-int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
+int g_spin_try_lockw(g_spin_t* s, double sec, int spin)
 {
 	if (sec <= 0) {
 		return SPIN_WRITER_TRYLOCK(s) ? 0 : 1;
@@ -2526,7 +2526,7 @@ int g_spin_try_lockw(g_spin_t *s, double sec, int spin)
 	return ret;
 }
 
-void g_spin_unlockw(g_spin_t *s)
+void g_spin_unlockw(g_spin_t* s)
 {
 	SPIN_DEBUG_DEC_WRITER(s);
 
@@ -2544,7 +2544,7 @@ void g_spin_unlockw(g_spin_t *s)
 
 #define SPIN_READER_UNLOCK(s) __sync_sub_and_fetch(&s->sem, 1)
 
-void g_spin_lockr(g_spin_t *s, int spin)
+void g_spin_lockr(g_spin_t* s, int spin)
 {
 	int spin_ret;
 	while (!SPIN_READER_TRYLOCK(s)) {
@@ -2556,7 +2556,7 @@ void g_spin_lockr(g_spin_t *s, int spin)
 	SPIN_DEBUG_INC_READER(s);
 }
 
-int g_spin_try_lockr(g_spin_t *s, double sec, int spin)
+int g_spin_try_lockr(g_spin_t* s, double sec, int spin)
 {
 	if (sec <= 0) {
 		return SPIN_READER_TRYLOCK(s) ? 0 : 1;
@@ -2582,7 +2582,7 @@ int g_spin_try_lockr(g_spin_t *s, double sec, int spin)
 	return ret;
 }
 
-void g_spin_unlockr(g_spin_t *s)
+void g_spin_unlockr(g_spin_t* s)
 {
 	SPIN_DEBUG_DEC_READER(s);
 

@@ -19,12 +19,6 @@ namespace sax {
 
 class slab_t
 {
-	struct fake_node_t
-	{
-		fake_node_t* _next;
-		fake_node_t* _prev;
-	};
-
 public:
 	slab_t(size_t size);
 	~slab_t();
@@ -36,17 +30,31 @@ public:
 
 	// for test
 	inline size_t get_list_length() {return _list_length;}
-	inline size_t get_total_amount() {return _total_amount;}
 	inline size_t get_shrink_amount() {return _shrink_amount;}
 	inline size_t get_alloc_size() {return _alloc_size;}
 
 private:
-	linkedlist<fake_node_t> _free_list;
+
+	inline void push_front(void** node)
+	{
+		node[0] = _free_list_head;
+		_free_list_head = node;
+		_list_length += 1;
+	}
+
+	inline void** pop_front()
+	{
+		void** tmp = (void**) _free_list_head;
+		_free_list_head = (void**) _free_list_head[0];
+		_list_length -= 1;
+		return tmp;
+	}
+
+	void** _free_list_head;
+	spin_type _lock;
 	size_t _list_length;
-	size_t _total_amount;
 	size_t _shrink_amount;
 	size_t _alloc_size;
-	spin_type _lock;
 
 	// declare for linkedlist
 	friend class slab_mgr;

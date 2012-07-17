@@ -86,6 +86,9 @@ t_spin.exe: t_spin.cpp ../libsax.a
 
 t_slab.exe: t_slab.cpp ../libsax.a
 	$(CXX) -Wall -g -D_DEBUG -o t_slab.exe t_slab.cpp $(INC) $(LIB)
+	
+t_slab_benchmark.exe: t_slab_benchmark.cpp ../libsax.a
+	$(CXX) -Wall -g -D_DEBUG -o t_slab_benchmark.exe t_slab_benchmark.cpp $(INC) $(LIB)
 
 t_eda_echo_server.exe: t_eda_echo_server.cpp ../libsax.a
 	$(CXX) -Wall -g -o t_eda_echo_server.exe t_eda_echo_server.cpp $(INC) $(LIB)

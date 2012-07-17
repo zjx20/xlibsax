@@ -351,28 +351,28 @@ typedef enum {
 } spin_type;
 
 /// @brief initialize
-g_spin_t *g_spin_init(spin_type type);
+g_spin_t* g_spin_init(spin_type type);
 
 /// @brief deconstruct
-void g_spin_free(g_spin_t *a);
+void g_spin_free(g_spin_t* s);
 
 /// @brief lock a spin lock
-void g_spin_enter(g_spin_t *a, int spin);
+void g_spin_enter(g_spin_t* s, int spin);
 
 /// @brief release a spin lock
-void g_spin_leave(g_spin_t *a);
+void g_spin_leave(g_spin_t* s);
 
 /// @brief try to get a writer lock.
-void g_spin_lockw(g_spin_t *s, int spin);
-int  g_spin_try_lockw(g_spin_t *s, double sec, int spin);
+void g_spin_lockw(g_spin_t* s, int spin);
+int  g_spin_try_lockw(g_spin_t* s, double sec, int spin);
 
 /// @brief try to get a reader lock.
-void g_spin_lockr(g_spin_t *s, int spin);
-int  g_spin_try_lockr(g_spin_t *s, double sec, int spin);
+void g_spin_lockr(g_spin_t* s, int spin);
+int  g_spin_try_lockr(g_spin_t* s, double sec, int spin);
 
 /// @brief release the lock.
-void g_spin_unlockw(g_spin_t *s);
-void g_spin_unlockr(g_spin_t *s);
+void g_spin_unlockw(g_spin_t* s);
+void g_spin_unlockr(g_spin_t* s);
 
 //-------------------------------------------------------------------------
 
