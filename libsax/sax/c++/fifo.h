@@ -2,65 +2,110 @@
 #define __FIFO_H_QS__
 
 /**
- * a thread-safe fifo queue implemented by array
+ * a thread-safe fifo queue
  */
 
-#include <sax/sysutil.h>
+#include "sax/sysutil.h"
+#include "sax/compiler.h"
 #include "nocopy.h"
 
 namespace sax {
 
-template<class T>
+template<typename T, typename Allocator = std::allocator<T> >
 class fifo : public nocopy
 {
-public:
-	inline fifo(uint32_t cap=1024):
-		_cap(cap), _wsem(cap, cap), _rsem(cap, 0)
+	struct node
 	{
-		_msg = new T[cap];
-		_wid = _rid = 0;
+		T value;
+		node* next;
+	};
+
+public:
+	inline fifo() : _sem((uint32_t)-1, 0)
+	{
+		_whead = NULL;
+		_wtail = NULL;
+		_rhead = NULL;
+		_rtail = NULL;
 	}
 	inline ~fifo() 
 	{
-		delete[] _msg;
+//		node* n = _whead;
+//		while (n != NULL) {
+//			node* tmp = n->next;
+//			_allocator.deallocate(n);
+//			n = tmp;
+//		}  TODO
 	}
 	bool push_back(const T &one, double sec)
 	{
-		if (_wsem.wait(sec))
-		{
-			auto_mutex lock(&_wmtx);
-			_msg[_wid++] = one;
-			if (_wid >= _cap) _wid = 0;
-			_rsem.post();
-			return true;
+		node* n = _allocator.allocate(1, NULL);
+		if (UNLIKELY(n == NULL)) return false;
+
+		_allocator.construct(&n->value, one);
+		n->next = NULL;
+
+		auto_lock<spin_type> lock(_wlock);
+		if (_wtail != NULL) {
+			_wtail->next = n;
+			_wtail = n;
 		}
-		return false;
+		else {
+			_whead = _wtail = n;
+		}
+
+		_sem.post();
+
+		return true;
 	}
 	bool pop_front(T &one, double sec)
 	{
-		if (_rsem.wait(sec))
-		{
-			auto_mutex lock(&_rmtx);
-			one = _msg[_rid++];
-			if (_rid >= _cap) _rid = 0;
-			_wsem.post();
+		if (_sem.wait(sec)) {
+			_rlock.enter();
+
+			if (_rhead == NULL) {
+				// _sem.wait() passed, always have element
+				_wlock.enter();
+
+				_rhead = _whead;
+				_rtail = _wtail;
+				_whead = NULL;
+				_wtail = NULL;
+
+				_wlock.leave();
+			}
+
+			node* n = _rhead;
+			one = n->value;
+			_allocator.destroy(n);
+			_allocator.deallocate(n, 1);
+
+			if (_rhead != _rtail) {
+				_rhead = _rhead->next;
+			}
+			else {
+				_rhead = _rtail = NULL;
+			}
+
+			_rlock.leave();
+
 			return true;
 		}
 		return false;
 	}
 
 protected:
-	T *_msg; ///> container
-	uint32_t _cap; ///> size
-	
-	uint32_t _wid; ///> cursor for writing
-	uint32_t _rid; ///> cursor for reading
+	node* _whead;
+	node* _wtail;
+	node* _rhead;
+	node* _rtail;
 
 private:
-	mutex_type _wmtx;
-	mutex_type _rmtx;
-	sema_type  _wsem;
-	sema_type  _rsem;
+	spin_type _wlock;
+	spin_type _rlock;
+	sema_type _sem;
+
+	typename Allocator::template rebind<node>::other _allocator;
 };
 
 } //namespace

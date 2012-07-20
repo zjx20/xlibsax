@@ -192,7 +192,7 @@ public:
 
 	// NB: __n is permitted to be 0.  The C++ standard says nothing
 	// about what the return value is when __n == 0.
-	pointer allocate(size_type __n, const void* = 0)
+	pointer allocate(size_type __n, const void* = 0) throw()
 	{
 		//printf("type %s size %lu in slab_stl_allocate __n = %lu.\n", typeid(_Tp).name(),
 		//		sizeof(_Tp), (size_t) __n);
@@ -206,7 +206,7 @@ public:
 	}
 
 	// __p is not permitted to be a null pointer.
-	void deallocate(pointer __p, size_type __n)
+	void deallocate(pointer __p, size_type __n) throw()
 	{
 		if (LIKELY(__n == 1)) {
 			sax::slab_holder<sizeof(_Tp)>::get_slab().free(static_cast<void*>(__p));
@@ -235,6 +235,8 @@ public:
 #define SLAB_NEW3(type, p1, p2, p3) new type(p1, p2, p3)
 
 #define SLAB_DELETE(type, obj_ptr) delete static_cast<type*>(obj_ptr)
+
+typedef std::allocator slab_stl_allocator;
 
 #endif
 

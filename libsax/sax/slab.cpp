@@ -37,7 +37,7 @@ void slab_mgr::shrink_slabs(double keep/* = 0.9*/)
 
 
 slab_t::slab_t(size_t size) :
-		_free_list_head(NULL), _lock(8)
+		_free_list_head(NULL)
 {
 	_list_length = 0;
 	_shrink_amount = 0;

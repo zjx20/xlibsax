@@ -5,6 +5,7 @@
 
 #include "fifo.h"
 #include "pools.h"
+#include "../slab.h"
 
 namespace sax {
 
@@ -17,14 +18,25 @@ protected:
 	int type_id;
 };
 
-template<int tid>
+template<int TID, typename REAL_TYPE>
 class event_base : public event_type
 {
 public:
-	enum {ID = tid};
+	enum {ID = TID};
 	virtual ~event_base() {}
+
+	static REAL_TYPE* new_event()
+	{
+		return SLAB_NEW(REAL_TYPE);
+	}
+
+	void destroy()
+	{
+		SLAB_DELETE(REAL_TYPE, this);
+	}
+
 protected:
-	inline event_base(int id=tid) : event_type(id) {}
+	inline event_base() : event_type(TID) {}
 };
 
 struct handler_base {
