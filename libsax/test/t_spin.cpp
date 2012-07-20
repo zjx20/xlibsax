@@ -29,12 +29,17 @@
 #endif
 
 volatile int counter = 0;
+volatile int thread_count;
+int thread_total;
 
 #if defined(SPIN_RWLOCK_PREFER_READER) || defined(SPIN_RWLOCK_PREFER_WRITER)
 void* reader_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
-	g_spin_t* spin = (g_spin_t*) params[0];
+	g_spin_rw_t* spin = (g_spin_rw_t*) params[0];
 	int spin_times = *((int*) params[1]);
 	int read_count = *((int*) params[2]);
 	int junk_sum = 0;
@@ -50,8 +55,11 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
-	g_spin_t* spin = (g_spin_t*) params[0];
+	g_spin_rw_t* spin = (g_spin_rw_t*) params[0];
 	int spin_times = *((int*) params[1]);
 	int write_count = *((int*) params[2]);
 	DEBUG_PRINT("begin writer work tid: %ld\n", g_thread_id());
@@ -66,15 +74,15 @@ void* writer_func(void* param)
 
 void* init_lock()
 {
-	spin_type type;
+	int type;
 #if defined(SPIN_RWLOCK_PREFER_READER)
-	type = RWLOCK_PREFER_READER;
+	type = 0;
 #elif defined(SPIN_RWLOCK_PREFER_WRITER)
-	type = RWLOCK_PREFER_WRITER;
+	type = 1;
 #else
 #error error!
 #endif
-	g_spin_t* s = g_spin_init(type);
+	g_spin_rw_t* s = g_spin_rw_init(type);
 	return s;
 }
 #endif
@@ -82,6 +90,9 @@ void* init_lock()
 #if defined(SPIN_PURE)
 void* reader_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	g_spin_t* spin = (g_spin_t*) params[0];
 	int spin_times = *((int*) params[1]);
@@ -99,6 +110,9 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	g_spin_t* spin = (g_spin_t*) params[0];
 	int spin_times = *((int*) params[1]);
@@ -115,7 +129,7 @@ void* writer_func(void* param)
 
 void* init_lock()
 {
-	g_spin_t* s = g_spin_init(PURE);
+	g_spin_t* s = g_spin_init();
 	return s;
 }
 #endif
@@ -123,6 +137,9 @@ void* init_lock()
 #if defined(PTHREAD_MUTEX)
 void* reader_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_mutex_t* lock = (pthread_mutex_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -140,6 +157,9 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_mutex_t* lock = (pthread_mutex_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -165,6 +185,9 @@ void* init_lock()
 #if defined(PTHREAD_SPIN)
 void* reader_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_spinlock_t* lock = (pthread_spinlock_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -182,6 +205,9 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_spinlock_t* lock = (pthread_spinlock_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -207,6 +233,9 @@ void* init_lock()
 #if defined(PTHREAD_RWLOCK_PREFER_READER) || defined(PTHREAD_RWLOCK_PREFER_WRITER)
 void* reader_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_rwlock_t* lock = (pthread_rwlock_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -224,6 +253,9 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
+	thread_count++;
+	while (thread_count != thread_total) g_thread_yield();
+
 	void** params = reinterpret_cast<void**>(param);
 	pthread_rwlock_t* lock = (pthread_rwlock_t*) params[0];
 	//int spin_times = *((int*) params[1]);
@@ -269,6 +301,9 @@ int main(int argc, char* argv[])
 	int count = atoi(argv[3]);
 
 	void* params[] = {init_lock(), &spin_times, &count};
+
+	thread_count = 0;
+	thread_total = reader_num + writer_num;
 
 	g_thread_t threads[reader_num + writer_num];
 

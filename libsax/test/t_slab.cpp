@@ -160,48 +160,99 @@ TEST(slab, SLAB_NEW)
 {
 	int* int1 = SLAB_NEW(int);
 	SLAB_DELETE(int, int1);
-	ASSERT_EQ(1, slab_holder<int>::get_slab().get_list_length());
+	ASSERT_EQ(1, slab_holder<sizeof(int)>::get_slab().get_list_length());
 }
 
-//TEST(benchmark, slab_int)
-//{
-//	slab_t slab(sizeof(int));
-//	void** ptrs = (void**)malloc(sizeof(void*) * 1000000);
-//	for (int j=0;j<1000000;j++) {
-//		for (int i=0;i<10;i++) {
-//			ptrs[i] = slab.alloc();
-//		}
-//		for (int i=0;i<10;i++) {
-//			slab.free(ptrs[i]);
-//		}
-//	}
-//}
-//
-//TEST(benchmark, slab_new_int)
-//{
-//	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
-//	for (int j=0;j<1000000;j++) {
-//		for (int i=0;i<10;i++) {
-//			ptrs[i] = SLAB_NEW(int);
-//		}
-//		for (int i=0;i<10;i++) {
-//			SLAB_DELETE(int, ptrs[i]);
-//		}
-//	}
-//}
-//
-//TEST(benchmark, new_int)
-//{
-//	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
-//	for (int j=0;j<1000000;j++) {
-//		for (int i=0;i<10;i++) {
-//			ptrs[i] = new int;
-//		}
-//		for (int i=0;i<10;i++) {
-//			delete ptrs[i];
-//		}
-//	}
-//}
+#include <list>
+
+#define TEST_LIST_APPEND_COUNT 5000000
+
+struct big_struct
+{
+	char a[256];
+};
+
+TEST(slab_stl_allocator, list_std_allocator)
+{
+	std::list<big_struct> l;
+	big_struct a;
+	for (int i = 0; i < TEST_LIST_APPEND_COUNT; i++) {
+		l.push_back(a);
+	}
+}
+
+TEST(slab_stl_allocator, list1)
+{
+	std::list< big_struct, sax::slab_stl_allocator<big_struct> > l;
+	big_struct a;
+	for (int i = 0; i < TEST_LIST_APPEND_COUNT; i++) {
+		l.push_back(a);
+	}
+}
+
+TEST(slab_stl_allocator, list2)
+{
+	std::list< big_struct, sax::slab_stl_allocator<big_struct> > l;
+	big_struct a;
+	for (int i = 0; i < TEST_LIST_APPEND_COUNT; i++) {
+		l.push_back(a);
+	}
+}
+
+#include <map>
+
+TEST(slab_stl_allocator, map)
+{
+	{
+		std::map<int, std::list<int>, std::less<int>,
+		sax::slab_stl_allocator< std::pair<const int, std::list<int> > > > m;
+
+		m[0].push_back(1);
+	}
+}
+
+TEST(benchmark, slab_int)
+{
+	slab_t slab(sizeof(int));
+	void** ptrs = (void**)malloc(sizeof(void*) * 1000000);
+	for (int j=0;j<1000000;j++) {
+		for (int i=0;i<10;i++) {
+			ptrs[i] = slab.alloc();
+		}
+		for (int i=0;i<10;i++) {
+			slab.free(ptrs[i]);
+		}
+	}
+	free(ptrs);
+}
+
+TEST(benchmark, slab_new_int)
+{
+	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
+	for (int j=0;j<1000000;j++) {
+		for (int i=0;i<10;i++) {
+			ptrs[i] = SLAB_NEW(int);
+		}
+		for (int i=0;i<10;i++) {
+			SLAB_DELETE(int, ptrs[i]);
+		}
+	}
+	free(ptrs);
+}
+
+TEST(benchmark, new_int)
+{
+	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
+	for (int j=0;j<1000000;j++) {
+		for (int i=0;i<10;i++) {
+			ptrs[i] = new int;
+		}
+		for (int i=0;i<10;i++) {
+			delete ptrs[i];
+		}
+	}
+	free(ptrs);
+}
 
 int main(int argc, char *argv[])
 {

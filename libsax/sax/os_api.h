@@ -342,16 +342,8 @@ void g_share_unlock(g_share_t *s);
 //-------------------------------------------------------------------------
 typedef struct g_spin_t g_spin_t;
 
-typedef enum {
-	PURE = 1,	/* work with g_spin_enter() / g_spin_leave() pair */
-
-	/* work with g_spin_lock() / g_spin_unlock() serials */
-	RWLOCK_PREFER_READER = 2,
-	RWLOCK_PREFER_WRITER = 4
-} spin_type;
-
 /// @brief initialize
-g_spin_t* g_spin_init(spin_type type);
+g_spin_t* g_spin_init();
 
 /// @brief deconstruct
 void g_spin_free(g_spin_t* s);
@@ -362,17 +354,26 @@ void g_spin_enter(g_spin_t* s, int spin);
 /// @brief release a spin lock
 void g_spin_leave(g_spin_t* s);
 
+//-------------------------------------------------------------------------
+typedef struct g_spin_rw_t g_spin_rw_t;
+
+/// @brief initialize
+g_spin_rw_t* g_spin_rw_init(int prefer_writer);
+
+/// @brief deconstruct
+void g_spin_rw_free(g_spin_rw_t* s);
+
 /// @brief try to get a writer lock.
-void g_spin_lockw(g_spin_t* s, int spin);
-int  g_spin_try_lockw(g_spin_t* s, double sec, int spin);
+void g_spin_lockw(g_spin_rw_t* s, int spin);
+int  g_spin_try_lockw(g_spin_rw_t* s, double sec, int spin);
 
 /// @brief try to get a reader lock.
-void g_spin_lockr(g_spin_t* s, int spin);
-int  g_spin_try_lockr(g_spin_t* s, double sec, int spin);
+void g_spin_lockr(g_spin_rw_t* s, int spin);
+int  g_spin_try_lockr(g_spin_rw_t* s, double sec, int spin);
 
 /// @brief release the lock.
-void g_spin_unlockw(g_spin_t* s);
-void g_spin_unlockr(g_spin_t* s);
+void g_spin_unlockw(g_spin_rw_t* s);
+void g_spin_unlockr(g_spin_rw_t* s);
 
 //-------------------------------------------------------------------------
 

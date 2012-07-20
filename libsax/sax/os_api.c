@@ -2359,67 +2359,62 @@ void g_share_unlock(g_share_t *s)
 }
 // ################################################################
 
-#ifndef SPIN_DEBUG
+#if !defined(_DEBUG)
 #define SPIN_DEBUG 0
+#else
+#define SPIN_DEBUG 1
 #endif
-
-struct g_spin_t {
-	volatile int32_t sem;	///< semaphore
-	volatile int32_t w;		///< writers need lock
-#if SPIN_DEBUG
-	volatile int32_t rc;
-	volatile int32_t wc;
-#endif
-};
-
-#define SPIN_RWLOCK_LOCK_FLAG		0x20000000
-#define SPIN_PREFER_WRITER_FLAG		0x40000000
-
-#define SPIN_PURE_LOCK_VALUE		0x40000000
-#define SPIN_RWLOCK_LOCK_VALUE		SPIN_RWLOCK_LOCK_FLAG
 
 
 #if SPIN_DEBUG
-static void check_spin(g_spin_t* s)
-{
-	if (s->wc != 0) {
-		if (s->wc != 1 || s->rc != 0) assert(0);
-	}
-	else {
-		if (s->rc < 0) assert(0);
-	}
-}
 
-#define SPIN_CHECK(s) check_spin(s)
+#define SPIN_DEBUG_CHECK(s) \
+	do {	\
+		assert(s->wc <= 1);	\
+		assert((s->wc == 1 && s->rc == 0) || (s->wc == 0 && s->rc >= 0));	\
+	} while(0)
+
 #define SPIN_DEBUG_INC_READER(s) __sync_add_and_fetch(&s->rc, 1)
 #define SPIN_DEBUG_DEC_READER(s) __sync_sub_and_fetch(&s->rc, 1)
 #define SPIN_DEBUG_INC_WRITER(s) __sync_add_and_fetch(&s->wc, 1)
 #define SPIN_DEBUG_DEC_WRITER(s) __sync_sub_and_fetch(&s->wc, 1)
 
 #else
-#define SPIN_CHECK(s)
+#define SPIN_DEBUG_CHECK(s)
 #define SPIN_DEBUG_INC_READER(s)
 #define SPIN_DEBUG_DEC_READER(s)
 #define SPIN_DEBUG_INC_WRITER(s)
 #define SPIN_DEBUG_DEC_WRITER(s)
 #endif
 
+#define SPIN(s, spin, cond, ret)						\
+	do {												\
+		int n = 1, i;									\
+		do {											\
+			for (i = 0; i < n; i++) g_thread_pause();	\
+		} while (!(ret = (cond)) && (n <<= 1) < spin);	\
+	} while(0)
 
-g_spin_t* g_spin_init(spin_type type)
+
+struct g_spin_t {
+	volatile int32_t sem;	///< semaphore
+#if SPIN_DEBUG
+	volatile int32_t rc;
+	volatile int32_t wc;
+#endif
+};
+
+#define SPIN_PURE_INIT_VALUE		0x00000000
+#define SPIN_PURE_LOCK_VALUE		0x00000001
+
+g_spin_t* g_spin_init()
 {
 	g_spin_t* s = malloc(sizeof(g_spin_t));
 	if (s == NULL) return NULL;
 
 	memset(s, 0, sizeof(g_spin_t));
 
-	if (type == PURE) {
-		// only g_spin_enter() and g_spin_leave() can process with this value
-		// in the meanwhile, g_spin_enter() and g_spin_leave() will not work well without it
-		s->sem = SPIN_PURE_LOCK_VALUE;
-	}
-	else if (type == RWLOCK_PREFER_WRITER) {
-		s->w = SPIN_PREFER_WRITER_FLAG;
-	}
+	s->sem = SPIN_PURE_INIT_VALUE;
 
 	return s;
 }
@@ -2427,33 +2422,15 @@ g_spin_t* g_spin_init(spin_type type)
 void g_spin_free(g_spin_t* s)
 {
 	assert(s);
-	assert(s->sem == 0 || s->sem == SPIN_PURE_LOCK_VALUE);
-	assert((s->w & ~SPIN_PREFER_WRITER_FLAG) == 0);
+	assert(s->sem == SPIN_PURE_INIT_VALUE);
 	free(s);
 }
 
 
-#define SPIN(s, spin, cond, ret)			\
-	do {									\
-		int n, i;							\
-		ret = 0;							\
-		for (n = 1; n < spin; n <<= 1) {	\
-			for (i = 0; i < n; i++) {		\
-				g_thread_pause();			\
-			}								\
-			SPIN_CHECK(s);					\
-			if (cond) {						\
-				ret = 1;					\
-				break;						\
-			}								\
-		}									\
-	} while(0)
+#define SPIN_PURE_TRYLOCK(s) (s->sem == SPIN_PURE_INIT_VALUE && \
+		__sync_bool_compare_and_swap(&s->sem, SPIN_PURE_INIT_VALUE, SPIN_PURE_LOCK_VALUE))
 
-
-#define SPIN_PURE_TRYLOCK(s) (s->sem == SPIN_PURE_LOCK_VALUE && \
-		__sync_bool_compare_and_swap(&s->sem, SPIN_PURE_LOCK_VALUE, SPIN_PURE_LOCK_VALUE + 1))
-
-#define SPIN_PURE_UNLOCK(s) s->sem = SPIN_PURE_LOCK_VALUE
+#define SPIN_PURE_UNLOCK(s) s->sem = SPIN_PURE_INIT_VALUE
 
 void g_spin_enter(g_spin_t* s, int spin)
 {
@@ -2465,25 +2442,69 @@ void g_spin_enter(g_spin_t* s, int spin)
 	}
 
 	SPIN_DEBUG_INC_WRITER(s);
+	SPIN_DEBUG_CHECK(s);
 }
 
 void g_spin_leave(g_spin_t* s)
 {
+	SPIN_DEBUG_CHECK(s);
 	SPIN_DEBUG_DEC_WRITER(s);
 
 	SPIN_PURE_UNLOCK(s);
 }
 
+// ################################################################
+struct g_spin_rw_t {
+	volatile int32_t sem;	///< semaphore
+	volatile int32_t w;		///< writers need lock
+	int32_t prefer_writer;
+#if SPIN_DEBUG
+	volatile int32_t rc;
+	volatile int32_t wc;
+#endif
+};
 
-#define SPIN_WRITER_TRYLOCK(s) (s->sem == 0 && \
-		__sync_bool_compare_and_swap(&s->sem, 0, SPIN_RWLOCK_LOCK_VALUE))
+#define SPIN_WRITER_LOCK_FLAG		0x40000000
+#define SPIN_RWLOCK_INIT_VALUE		0x00000000
+#define SPIN_WRITER_LOCK_VALUE		(SPIN_RWLOCK_INIT_VALUE | SPIN_WRITER_LOCK_FLAG)
 
-#define SPIN_WRITER_UNLOCK(s) (__sync_and_and_fetch(&s->sem, ~SPIN_RWLOCK_LOCK_FLAG))
-
-void g_spin_lockw(g_spin_t* s, int spin)
+g_spin_rw_t* g_spin_rw_init(int prefer_writer)
 {
-	if (SPIN_WRITER_TRYLOCK(s)) return;
-	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_add_and_fetch(&s->w, 1);
+	g_spin_rw_t* s = malloc(sizeof(g_spin_rw_t));
+	if (s == NULL) return NULL;
+
+	memset(s, 0, sizeof(g_spin_rw_t));
+
+	s->sem = SPIN_RWLOCK_INIT_VALUE;
+	if (prefer_writer) {
+		s->prefer_writer = 1;
+	}
+
+	return s;
+}
+
+void g_spin_rw_free(g_spin_rw_t* s)
+{
+	assert(s);
+	assert(s->sem == SPIN_RWLOCK_INIT_VALUE);
+	assert((s->w) == 0);
+	free(s);
+}
+
+#define SPIN_WRITER_TRYLOCK(s) (s->sem == SPIN_RWLOCK_INIT_VALUE && \
+		__sync_bool_compare_and_swap(&s->sem, SPIN_RWLOCK_INIT_VALUE, SPIN_WRITER_LOCK_VALUE))
+
+#define SPIN_WRITER_UNLOCK(s) (__sync_and_and_fetch(&s->sem, ~SPIN_WRITER_LOCK_FLAG))
+
+void g_spin_lockw(g_spin_rw_t* s, int spin)
+{
+	if (SPIN_WRITER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+		return;
+	}
+
+	if (s->prefer_writer) __sync_add_and_fetch(&s->w, 1);
 
 	int spin_ret;
 	while (!SPIN_WRITER_TRYLOCK(s)) {
@@ -2492,19 +2513,23 @@ void g_spin_lockw(g_spin_t* s, int spin)
 		g_thread_yield();
 	}
 
-	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_sub_and_fetch(&s->w, 1);
+	if (s->prefer_writer) __sync_sub_and_fetch(&s->w, 1);
 
 	SPIN_DEBUG_INC_WRITER(s);
+	SPIN_DEBUG_CHECK(s);
 }
 
-int g_spin_try_lockw(g_spin_t* s, double sec, int spin)
+int g_spin_try_lockw(g_spin_rw_t* s, double sec, int spin)
 {
-	if (sec <= 0) {
-		return SPIN_WRITER_TRYLOCK(s) ? 0 : 1;
+	if (SPIN_WRITER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+		return 0;
 	}
 
-	if (SPIN_WRITER_TRYLOCK(s)) return 0;
-	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_add_and_fetch(&s->w, 1);
+	if (sec <= 0) return 1;
+
+	if (s->prefer_writer) __sync_add_and_fetch(&s->w, 1);
 
 	int ret = 0;
 	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
@@ -2517,34 +2542,37 @@ int g_spin_try_lockw(g_spin_t* s, double sec, int spin)
 		g_thread_yield();
 	}
 
-	if (s->w & SPIN_PREFER_WRITER_FLAG) __sync_sub_and_fetch(&s->w, 1);
+	if (s->prefer_writer) __sync_sub_and_fetch(&s->w, 1);
 
 #if SPIN_DEBUG
-	if (ret == 0) SPIN_DEBUG_INC_WRITER(s);
+	if (ret == 0) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+	}
 #endif
 
 	return ret;
 }
 
-void g_spin_unlockw(g_spin_t* s)
+void g_spin_unlockw(g_spin_rw_t* s)
 {
+	SPIN_DEBUG_CHECK(s);
 	SPIN_DEBUG_DEC_WRITER(s);
 
 	SPIN_WRITER_UNLOCK(s);
 }
 
 #define SPIN_READER_TRYLOCK(s) \
-	/* if prefer reader, than s->w == 0;
-	 * otherwise, s->w > SPIN_PREFER_WRITER_FLAG if writer got the lock */	\
-	( (s->w <= SPIN_PREFER_WRITER_FLAG) && \
-	/* check whether the lock was allocated by a writer */	\
-	(s->sem & SPIN_RWLOCK_LOCK_FLAG) == 0 && \
-	((__sync_fetch_and_add(&s->sem, 1) & SPIN_RWLOCK_LOCK_FLAG) ? \
-			(__sync_sub_and_fetch(&s->sem, 1), 0) : 1) )
+	/* s->w > 0 if there are some writers want to get the lock */	\
+	( (s->w == 0) && \
+	/* check whether the lock has been allocated by a writer */	\
+	(s->sem & SPIN_WRITER_LOCK_FLAG) == 0 && \
+	((__sync_fetch_and_add(&s->sem, 1) & SPIN_WRITER_LOCK_FLAG) ? \
+			(__sync_sub_and_fetch(&s->sem, 1), 0)/* comma expression, returning 0 */ : 1) )
 
 #define SPIN_READER_UNLOCK(s) __sync_sub_and_fetch(&s->sem, 1)
 
-void g_spin_lockr(g_spin_t* s, int spin)
+void g_spin_lockr(g_spin_rw_t* s, int spin)
 {
 	int spin_ret;
 	while (!SPIN_READER_TRYLOCK(s)) {
@@ -2554,15 +2582,18 @@ void g_spin_lockr(g_spin_t* s, int spin)
 	}
 
 	SPIN_DEBUG_INC_READER(s);
+	SPIN_DEBUG_CHECK(s);
 }
 
-int g_spin_try_lockr(g_spin_t* s, double sec, int spin)
+int g_spin_try_lockr(g_spin_rw_t* s, double sec, int spin)
 {
-	if (sec <= 0) {
-		return SPIN_READER_TRYLOCK(s) ? 0 : 1;
+	if (SPIN_READER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_READER(s);
+		SPIN_DEBUG_CHECK(s);
+		return 0;
 	}
 
-	if (SPIN_READER_TRYLOCK(s)) return 0;
+	if (sec <= 0) return 1;
 
 	int ret = 0;
 	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
@@ -2576,14 +2607,18 @@ int g_spin_try_lockr(g_spin_t* s, double sec, int spin)
 	}
 
 #if SPIN_DEBUG
-	if (ret == 0) SPIN_DEBUG_INC_READER(s);
+	if (ret == 0) {
+		SPIN_DEBUG_INC_READER(s);
+		SPIN_DEBUG_CHECK(s);
+	}
 #endif
 
 	return ret;
 }
 
-void g_spin_unlockr(g_spin_t* s)
+void g_spin_unlockr(g_spin_rw_t* s)
 {
+	SPIN_DEBUG_CHECK(s);
 	SPIN_DEBUG_DEC_READER(s);
 
 	SPIN_READER_UNLOCK(s);
