@@ -15,6 +15,9 @@ all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.e
 	t_ptr.exe t_eda_echo_server.exe t_log.exe t_buffer.exe t_tuple.exe \
 	t_buf_transport.exe t_thrift_utility.exe t_thrift_rpc_serial.exe
 
+%: %.cpp ../libsax.a
+	$(CXX) -Wall -g -D_DEBUG -o $@ $< $(INC) $(LIB)
+
 t_htab.exe:
 	$(CC) -Wall -O3 -s -o t_htab.exe t_htab.c $(INC) $(LIB)
 
@@ -89,6 +92,8 @@ t_slab.exe: t_slab.cpp ../libsax.a
 	
 t_slab_benchmark.exe: t_slab_benchmark.cpp ../libsax.a
 	$(CXX) -Wall -g -D_DEBUG -o t_slab_benchmark.exe t_slab_benchmark.cpp $(INC) $(LIB)
+
+
 
 t_eda_echo_server.exe: t_eda_echo_server.cpp ../libsax.a
 	$(CXX) -Wall -g -o t_eda_echo_server.exe t_eda_echo_server.cpp $(INC) $(LIB)

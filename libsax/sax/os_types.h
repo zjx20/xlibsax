@@ -40,26 +40,32 @@
 
 #ifndef IS_LITTLE_ENDIAN
 #if (defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && \
-    __BYTE_ORDER == __LITTLE_ENDIAN) || \
-    defined(i386) || defined(__i386__) || \
-    defined(__i486__) || \
-    defined(__i586__) || defined(__i686__) || \
-    defined(vax) || \
-    defined(MIPSEL) || defined(_MIPSEL) || \
-    defined(ns32000) || \
-    defined(sun386) || \
+		__BYTE_ORDER == __LITTLE_ENDIAN) || \
+	(defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && \
+		__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || \
+	defined(i386) || defined(__i386__) || \
+	defined(__i486__) || \
+	defined(__i586__) || defined(__i686__) || \
+	defined(__ia64) || defined(__ia64__) || \
+	defined(_M_IX86) || defined(_M_IA64) || \
+	defined(_M_ALPHA) || defined(__amd64) || \
+	defined(__amd64__) || defined(_M_AMD64) || \
+	defined(__x86_64) || defined(__x86_64__) || \
+	defined(_M_X64) || defined(__bfin__) || \
+	defined(vax) || \
+	defined(MIPSEL) || defined(_MIPSEL) || \
+	defined(ns32000) || \
+	defined(sun386) || \
 	defined(BIT_ZERO_ON_RIGHT) || \
 	defined(__alpha__) || defined(__alpha)
 #define IS_LITTLE_ENDIAN 1
 #else
+#warning "is your target use big endian? you can define the macro IS_LITTLE_ENDIAN to handle this warning, \
+or just ignore it if you sure what you are doing."
 #define IS_LITTLE_ENDIAN 0
 #endif
 #endif//IS_LITTLE_ENDIAN
 
-
-#ifndef UNUSED_PARAMETER
-#define UNUSED_PARAMETER(x) (void)(x)
-#endif//UNUSED_PARAMETER
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))

@@ -20,6 +20,8 @@ class fifo : public nocopy
 		node* next;
 	};
 
+	typedef typename Allocator::template rebind<node>::other node_allocator_type;
+
 public:
 	inline fifo() : _sem((uint32_t)-1, 0)
 	{
@@ -28,24 +30,31 @@ public:
 		_rhead = NULL;
 		_rtail = NULL;
 	}
+
 	inline ~fifo() 
 	{
-//		node* n = _whead;
-//		while (n != NULL) {
-//			node* tmp = n->next;
-//			_allocator.deallocate(n);
-//			n = tmp;
-//		}  TODO
+		if (_wtail != NULL) _wtail->next = _rhead;
+		node* n = _whead;
+		while (n != NULL) {
+			node* tmp = n->next;
+			(&n->value)->~T();
+			node_allocator_type().deallocate(n, 1);
+			n = tmp;
+		}
+
+		_whead = _wtail = NULL;
+		_rhead = _rtail = NULL;
 	}
-	bool push_back(const T &one, double sec)
+
+	bool push_back(const T &one)
 	{
-		node* n = _allocator.allocate(1, NULL);
+		node* n = node_allocator_type().allocate(1, NULL);
 		if (UNLIKELY(n == NULL)) return false;
 
-		_allocator.construct(&n->value, one);
+		::new (&n->value) T(one);
 		n->next = NULL;
 
-		auto_lock<spin_type> lock(_wlock);
+		_wlock.enter();
 		if (_wtail != NULL) {
 			_wtail->next = n;
 			_wtail = n;
@@ -53,32 +62,32 @@ public:
 		else {
 			_whead = _wtail = n;
 		}
+		_wlock.leave();
 
 		_sem.post();
 
 		return true;
 	}
-	bool pop_front(T &one, double sec)
+
+	// sec < 0 wait forever; sec = 0 return immediately; sec > 0 wait sec seconds
+	bool pop_front(T &one, double sec = 0)
 	{
 		if (_sem.wait(sec)) {
 			_rlock.enter();
 
 			if (_rhead == NULL) {
-				// _sem.wait() passed, always have element
+				// _sem.wait() passed, there are always have elements to pop
 				_wlock.enter();
 
 				_rhead = _whead;
 				_rtail = _wtail;
-				_whead = NULL;
-				_wtail = NULL;
+				_whead = _wtail = NULL;
 
 				_wlock.leave();
 			}
 
 			node* n = _rhead;
 			one = n->value;
-			_allocator.destroy(n);
-			_allocator.deallocate(n, 1);
 
 			if (_rhead != _rtail) {
 				_rhead = _rhead->next;
@@ -86,6 +95,9 @@ public:
 			else {
 				_rhead = _rtail = NULL;
 			}
+
+			(&n->value)->~T();
+			node_allocator_type().deallocate(n, 1);
 
 			_rlock.leave();
 
@@ -104,8 +116,6 @@ private:
 	spin_type _wlock;
 	spin_type _rlock;
 	sema_type _sem;
-
-	typename Allocator::template rebind<node>::other _allocator;
 };
 
 } //namespace

@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
+#include <math.h>
 
 // some compilers do not define NDEBUG automatically
 // when release! we patch this for assert(.)!
@@ -1992,11 +1993,10 @@ static void to_abs_ts(double sec, struct timespec *ts)
 	assert(sec >= 0);
 	if (gettimeofday(&tv, NULL) == 0)
 	{
-		long   inte = (long) sec;
-		double frac = (sec - inte);
+		double inte, frac;
+		frac = modf(sec, &inte);
 		ts->tv_sec = tv.tv_sec + (time_t) inte;
-		ts->tv_nsec = (long) (
-			tv.tv_usec*1000 + frac*1000000000);
+		ts->tv_nsec = tv.tv_usec*1000 + (long)(frac*1000000000);
 		if (ts->tv_nsec >= 1000000000) {
 			ts->tv_sec++;
 			ts->tv_nsec -= 1000000000;
@@ -2630,17 +2630,17 @@ struct g_sema_t {sem_t sem;};
 
 g_sema_t *g_sema_init(uint32_t cap, uint32_t cnt)
 {
-	sem_t sem;
 	UNUSED_PARAMETER(cap);
 	
-	if (sem_init(&sem, 0, cnt)==0)
-	{
-		g_sema_t *s = (g_sema_t *) malloc(sizeof(g_sema_t));
-		assert(s);
-		s->sem = sem;
-		return s;
+	g_sema_t *s = (g_sema_t *) malloc(sizeof(g_sema_t));
+	if (s == NULL) return NULL;
+
+	if (sem_init(&s->sem, 0, cnt) != 0) {
+		free(s);
+		return NULL;
 	}
-	return NULL;
+
+	return s;
 }
 
 void g_sema_free(g_sema_t *s)
