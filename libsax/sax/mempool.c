@@ -1,6 +1,7 @@
-#include "mempool.h"
 #include <string.h>
+#include <assert.h>
 
+#include "mempool.h"
 #include "os_api.h"
 
 /** 
@@ -819,3 +820,85 @@ void* g_fsb_getblock(struct fsb_pool_t *pool, uint64_t key)
 	return NULL;
 }
 
+//-----------------------------------------------------------------
+typedef struct g_xslab_t
+{
+	void** head;
+	int32_t usable_amount;
+	int32_t shrink_amount;
+	int32_t alloc_size;
+} g_xslab_t;
+
+g_xslab_t* g_xslab_init(int32_t size)
+{
+	g_xslab_t* slab = (g_xslab_t*)malloc(sizeof(g_xslab_t));
+	if (slab == NULL) return NULL;
+
+	if (size < sizeof(void*)) size = sizeof(void*);
+
+	slab->head = NULL;
+	slab->usable_amount = 0;
+	slab->shrink_amount = 0;
+	slab->alloc_size = size;
+
+	return slab;
+}
+
+void g_xslab_destroy(g_xslab_t* slab)
+{
+	while (slab->usable_amount > 0) {
+		void* ptr = slab->head;
+		slab->head = (void**)((slab->head)[0]);
+		--(slab->usable_amount);
+		free(ptr);
+	}
+	free(slab);
+}
+
+void* g_xslab_alloc(g_xslab_t* slab)
+{
+	if (slab->usable_amount > 0) {
+		void* ptr = slab->head;
+		slab->head = (void**)((slab->head)[0]);
+		--(slab->usable_amount);
+		return ptr;
+	}
+
+	return malloc(slab->alloc_size);
+}
+
+void g_xslab_free(g_xslab_t* slab, void* ptr)
+{
+	if (LIKELY(slab->shrink_amount == 0)) {
+		((void**)ptr)[0] = slab->head;
+		slab->head = (void**)ptr;
+		++(slab->usable_amount);
+	}
+	else {
+		free(ptr);
+		--(slab->shrink_amount);
+	}
+}
+
+void g_xslab_shrink(g_xslab_t* slab, double keep)
+{
+	assert(keep >= 0.0 && keep <= 1.0);
+
+	int32_t tmp_usable_amount = slab->usable_amount;
+	slab->shrink_amount = tmp_usable_amount - (int32_t) (tmp_usable_amount * keep);
+}
+
+int32_t g_xslab_alloc_size(g_xslab_t* slab)
+{
+	return slab->alloc_size;
+}
+
+int32_t g_xslab_usable_amount(g_xslab_t* slab)
+{
+	return slab->usable_amount;
+}
+
+int32_t g_xslab_shrink_amount(g_xslab_t* slab)
+{
+	return slab->shrink_amount;
+}

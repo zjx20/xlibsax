@@ -1,16 +1,10 @@
 #ifndef SLAB_H_
 #define SLAB_H_
 
-/**
- * @file slab.h
- * @brief a memory holder layer between user and system
- *
- * @author X
- * @date 2012.7.13
- */
-
 #include <stddef.h>
+#include <assert.h>
 #include "os_types.h"
+#include "mempool.h"
 #include "sysutil.h"
 #include "compiler.h"
 #include "c++/linkedlist.h"
@@ -20,41 +14,38 @@ namespace sax {
 class slab_t
 {
 public:
-	slab_t(size_t size);
+	slab_t(int32_t size);
 	~slab_t();
 
-	void shrink(double keep);
+	inline void shrink(double keep)
+	{
+		g_spin_enter(_lock, 4);
+		g_xslab_shrink(_slab, keep);
+		g_spin_leave(_lock);
+	}
 
-	void* alloc();
-	void free(void* ptr);
+	inline void* alloc()
+	{
+		g_spin_enter(_lock, 4);
+		void* ptr = g_xslab_alloc(_slab);
+		g_spin_leave(_lock);
+		return ptr;
+	}
 
-	// for test
-	inline size_t get_list_length() {return _list_length;}
-	inline size_t get_shrink_amount() {return _shrink_amount;}
-	inline size_t get_alloc_size() {return _alloc_size;}
+	inline void free(void* ptr)
+	{
+		g_spin_enter(_lock, 4);
+		g_xslab_free(_slab, ptr);
+		g_spin_leave(_lock);
+	}
+
+	inline int32_t get_alloc_size() { return g_xslab_alloc_size(_slab); }
+	inline int32_t get_usable_amount() { return g_xslab_usable_amount(_slab); }
+	inline int32_t get_shrink_amount() { return g_xslab_shrink_amount(_slab); }
 
 private:
-
-	inline void push_front(void** node)
-	{
-		node[0] = _free_list_head;
-		_free_list_head = node;
-		_list_length += 1;
-	}
-
-	inline void** pop_front()
-	{
-		void** tmp = (void**) _free_list_head;
-		_free_list_head = (void**) _free_list_head[0];
-		_list_length -= 1;
-		return tmp;
-	}
-
-	void** _free_list_head;
-	spin_type _lock;
-	size_t _list_length;
-	size_t _shrink_amount;
-	size_t _alloc_size;
+	g_xslab_t* _slab;
+	g_spin_t* _lock;
 
 	// declare for linkedlist
 	friend class slab_mgr;
@@ -68,10 +59,22 @@ class slab_mgr
 	friend class slab_t;
 
 public:
-	static slab_mgr* get_instance();
+	static slab_mgr* get_instance()
+	{
+		static slab_mgr instance;
+		return &instance;
+	}
 
 	// try to shrunk every slab
-	void shrink_slabs(double keep = 0.9);
+	void shrink_slabs(double keep = 0.9)
+	{
+		auto_lock<spin_type> scoped_lock(_lock);
+		slab_t* node = _slab_list.head();
+		while (node != NULL) {
+			node->shrink(keep);
+			node = node->_next;
+		}
+	}
 
 	// for test
 	inline size_t get_slabs_size() {return _slabs_size;}
@@ -80,13 +83,47 @@ private:
 
 	slab_mgr() {_slabs_size = 0;}
 
-	void register_slab(slab_t* slab);
-	void unregister_slab(slab_t* slab);
+	void register_slab(slab_t* slab)
+	{
+		auto_lock<spin_type> scoped_lock(_lock);
+		_slab_list.push_back(slab);
+		_slabs_size += 1;
+	}
+
+	void unregister_slab(slab_t* slab)
+	{
+		auto_lock<spin_type> scoped_lock(_lock);
+		_slab_list.erase(slab);
+		_slabs_size -= 1;
+	}
 
 	spin_type _lock;
 	linkedlist<slab_t> _slab_list;
 	size_t _slabs_size;
 };
+
+inline slab_t::slab_t(int32_t size)
+{
+	_slab = g_xslab_init(size);
+	_lock = g_spin_init();
+
+	assert(_slab);
+	assert(_lock);
+
+	_next = _prev = NULL;
+
+	slab_mgr::get_instance()->register_slab(const_cast<slab_t*>(this));
+}
+
+inline slab_t::~slab_t()
+{
+	slab_mgr::get_instance()->unregister_slab(const_cast<slab_t*>(this));
+
+	g_xslab_destroy(_slab);
+	g_spin_free(_lock);
+	_slab = NULL;
+	_lock = NULL;
+}
 
 /*********************************************************************/
 

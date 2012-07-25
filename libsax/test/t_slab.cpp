@@ -6,7 +6,7 @@
  */
 
 #include "gtest/gtest.h"
-#include "sax/slab.h"
+#include "sax/slabutil.h"
 
 using namespace sax;
 
@@ -77,22 +77,22 @@ TEST(slab, basic_test)
 
 		void* ptr = slab.alloc();
 
-		ASSERT_EQ((size_t) 0, slab.get_list_length());
+		ASSERT_EQ((size_t) 0, slab.get_usable_amount());
 		ASSERT_EQ((size_t) 0, slab.get_shrink_amount());
 
 		slab.free(ptr);
 
-		ASSERT_EQ((size_t) 1, slab.get_list_length());
+		ASSERT_EQ((size_t) 1, slab.get_usable_amount());
 		ASSERT_EQ((size_t) 0, slab.get_shrink_amount());
 
 		ptr = slab.alloc();
 
-		ASSERT_EQ((size_t) 0, slab.get_list_length());
+		ASSERT_EQ((size_t) 0, slab.get_usable_amount());
 		ASSERT_EQ((size_t) 0, slab.get_shrink_amount());
 
 		void* ptr2 = slab.alloc();
 
-		ASSERT_EQ((size_t) 0, slab.get_list_length());
+		ASSERT_EQ((size_t) 0, slab.get_usable_amount());
 		ASSERT_EQ((size_t) 0, slab.get_shrink_amount());
 
 		slab.free(ptr2);
@@ -126,7 +126,7 @@ TEST(slab, shrink)
 	ptr = slab.alloc();
 	slab.free(ptr);
 
-	ASSERT_EQ(0, slab.get_list_length());
+	ASSERT_EQ(0, slab.get_usable_amount());
 	ASSERT_EQ(0, slab.get_shrink_amount());
 
 	{
@@ -151,7 +151,7 @@ TEST(slab, shrink)
 			slab.free(ptrs[i]);
 		}
 
-		ASSERT_EQ(6, slab.get_list_length());
+		ASSERT_EQ(6, slab.get_usable_amount());
 		ASSERT_EQ(0, slab.get_shrink_amount());
 	}
 }
@@ -160,7 +160,7 @@ TEST(slab, SLAB_NEW)
 {
 	int* int1 = SLAB_NEW(int);
 	SLAB_DELETE(int, int1);
-	ASSERT_EQ(1, slab_holder<sizeof(int)>::get_slab().get_list_length());
+	ASSERT_EQ(1, slab_holder<sizeof(int)>::get_slab().get_usable_amount());
 }
 
 #include <list>
@@ -211,48 +211,48 @@ TEST(slab_stl_allocator, map)
 	}
 }
 
-TEST(benchmark, slab_int)
-{
-	slab_t slab(sizeof(int));
-	void** ptrs = (void**)malloc(sizeof(void*) * 1000000);
-	for (int j=0;j<1000000;j++) {
-		for (int i=0;i<10;i++) {
-			ptrs[i] = slab.alloc();
-		}
-		for (int i=0;i<10;i++) {
-			slab.free(ptrs[i]);
-		}
-	}
-	free(ptrs);
-}
-
-TEST(benchmark, slab_new_int)
-{
-	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
-	for (int j=0;j<1000000;j++) {
-		for (int i=0;i<10;i++) {
-			ptrs[i] = SLAB_NEW(int);
-		}
-		for (int i=0;i<10;i++) {
-			SLAB_DELETE(int, ptrs[i]);
-		}
-	}
-	free(ptrs);
-}
-
-TEST(benchmark, new_int)
-{
-	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
-	for (int j=0;j<1000000;j++) {
-		for (int i=0;i<10;i++) {
-			ptrs[i] = new int;
-		}
-		for (int i=0;i<10;i++) {
-			delete ptrs[i];
-		}
-	}
-	free(ptrs);
-}
+//TEST(benchmark, slab_int)
+//{
+//	slab_t slab(sizeof(int));
+//	void** ptrs = (void**)malloc(sizeof(void*) * 1000000);
+//	for (int j=0;j<1000000;j++) {
+//		for (int i=0;i<10;i++) {
+//			ptrs[i] = slab.alloc();
+//		}
+//		for (int i=0;i<10;i++) {
+//			slab.free(ptrs[i]);
+//		}
+//	}
+//	free(ptrs);
+//}
+//
+//TEST(benchmark, slab_new_int)
+//{
+//	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
+//	for (int j=0;j<1000000;j++) {
+//		for (int i=0;i<10;i++) {
+//			ptrs[i] = SLAB_NEW(int);
+//		}
+//		for (int i=0;i<10;i++) {
+//			SLAB_DELETE(int, ptrs[i]);
+//		}
+//	}
+//	free(ptrs);
+//}
+//
+//TEST(benchmark, new_int)
+//{
+//	int** ptrs = (int**)malloc(sizeof(int*) * 1000000);
+//	for (int j=0;j<1000000;j++) {
+//		for (int i=0;i<10;i++) {
+//			ptrs[i] = new int;
+//		}
+//		for (int i=0;i<10;i++) {
+//			delete ptrs[i];
+//		}
+//	}
+//	free(ptrs);
+//}
 
 int main(int argc, char *argv[])
 {

@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <typeinfo>
 
-#include "sax/slab.h"
+#include "sax/slabutil.h"
 #include "sax/os_api.h"
 #include "sax/mempool.h"
 
@@ -40,6 +40,36 @@ clock_t test_malloc(int count)
 		free_wrap(ptrs[i]);
 	}
 
+	delete[] ptrs;
+
+	return end - start;
+}
+
+clock_t test_xslab(int count)
+{
+	void** ptrs = new void*[count];
+	g_xslab_t* slab = g_xslab_init(24);
+	for (int i=0;i<count;i++) {
+		ptrs[i] = g_xslab_alloc(slab);
+	}
+
+	for (int i=0;i<count;i++) {
+		g_xslab_free(slab, ptrs[i]);
+	}
+
+	clock_t start = clock();
+	for (int i=0;i<count;i++) {
+		ptrs[i] = g_xslab_alloc(slab);
+	}
+	clock_t end = clock();
+
+	for (int i=0;i<count;i++) {
+		g_xslab_free(slab, ptrs[i]);
+	}
+
+	g_xslab_destroy(slab);
+	delete[] ptrs;
+
 	return end - start;
 }
 
@@ -64,6 +94,8 @@ clock_t test_slab(int count)
 	for (int i=0;i<count;i++) {
 		slab.free(ptrs[i]);
 	}
+
+	delete[] ptrs;
 
 	return end - start;
 }
@@ -108,7 +140,7 @@ clock_t test_slab_stl_allocator(int count)
 
 int main(int argc, char* argv[])
 {
-	if(argc < 1) {
+	if(argc < 2) {
 		printf("usage: %s count\n", argv[0]);
 		return 1;
 	}
@@ -117,6 +149,7 @@ int main(int argc, char* argv[])
 
 	printf("test_malloc: %lu\n", test_malloc(count));
 	printf("test_slab: %lu\n", test_slab(count));
+	printf("test_xslab: %lu\n", test_xslab(count));
 	printf("test_std_allocator: %lu\n", test_std_allocator(count));
 	printf("test_slab_stl_allocator: %lu\n", test_slab_stl_allocator(count));
 

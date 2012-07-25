@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include "compiler.h"
 
 // some compilers do not define NDEBUG automatically
 // when release! we patch this for assert(.)!
@@ -2359,10 +2360,12 @@ void g_share_unlock(g_share_t *s)
 }
 // ################################################################
 
-#if !defined(_DEBUG)
-#define SPIN_DEBUG 0
-#else
-#define SPIN_DEBUG 1
+#if !defined(SPIN_DEBUG)
+	#if !defined(_DEBUG)
+	#define SPIN_DEBUG 0
+	#else
+	#define SPIN_DEBUG 1
+	#endif
 #endif
 
 
