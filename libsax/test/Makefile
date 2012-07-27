@@ -16,7 +16,7 @@ all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.e
 	t_buf_transport.exe t_thrift_utility.exe t_thrift_rpc_serial.exe
 
 %: %.cpp ../libsax.a
-	$(CXX) -Wall -g -D_DEBUG -o $@ $< $(INC) $(LIB)
+	$(CXX) -Wall -g -D_DEBUG -fstrict-aliasing -o $@ $< $(INC) $(LIB)
 
 t_htab.exe:
 	$(CC) -Wall -O3 -s -o t_htab.exe t_htab.c $(INC) $(LIB)
@@ -26,9 +26,6 @@ t_logger.exe:
 
 t_nio.exe:
 	$(CXX) -Wall -O3 -s -o t_nio.exe t_nio.cpp $(INC) $(LIB)
-
-t_timer.exe:
-	$(CC) -Wall -O3 -s -o t_timer.exe t_timer.c $(INC) $(LIB)
 
 t_stage.exe:
 	$(CXX) -Wall -O3 -s -o t_stage.exe t_stage.cpp $(INC) $(LIB)

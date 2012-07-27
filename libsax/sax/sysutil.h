@@ -40,38 +40,38 @@ private:
 	static void* proc(void *user);
 };
 
-/// @brief a wrapper for Single Timer Wheel Timer
-/// @remark derive the function on_timeout()
-class timer_base
-{
-public:
-	inline timer_base() : _stw(0) {}
-	virtual ~timer_base() {
-		if (_stw) g_timer_destroy(_stw);
-	}
-	inline uint32_t start(uint32_t delay, void *param) {
-		return (_stw ? g_timer_start(_stw, 
-			delay, &timer_base::proc, this, param) : 0);
-	}
-	inline bool cancel(uint32_t id) {
-		return _stw && g_timer_cancel(_stw, id);
-	}
-	inline bool init(uint32_t capacity, 
-		uint32_t wheel_size=1024, uint32_t granularity=10) 
-	{
-		if (_stw) g_timer_destroy(_stw);
-		_stw = g_timer_create(capacity, wheel_size, granularity);
-		return (NULL != _stw);
-	}
-	inline void poll() {
-		if (_stw) g_timer_loop(_stw);
-	}
-protected:
-	virtual void on_timeout(uint32_t id, void *param)=0;
-private:
-	g_timer_t *_stw;
-	static void proc(uint32_t id, void *client, void *param);
-};
+///// @brief a wrapper for Single Timer Wheel Timer
+///// @remark derive the function on_timeout()
+//class timer_base
+//{
+//public:
+//	inline timer_base() : _stw(0) {}
+//	virtual ~timer_base() {
+//		if (_stw) g_timer_destroy(_stw);
+//	}
+//	inline uint32_t start(uint32_t delay, void *param) {
+//		return (_stw ? g_timer_start(_stw,
+//			delay, &timer_base::proc, this, param) : 0);
+//	}
+//	inline bool cancel(uint32_t id) {
+//		return _stw && g_timer_cancel(_stw, id);
+//	}
+//	inline bool init(uint32_t capacity,
+//		uint32_t wheel_size=1024, uint32_t granularity=10)
+//	{
+//		if (_stw) g_timer_destroy(_stw);
+//		_stw = g_timer_create(capacity, wheel_size, granularity);
+//		return (NULL != _stw);
+//	}
+//	inline void poll() {
+//		if (_stw) g_timer_loop(_stw);
+//	}
+//protected:
+//	virtual void on_timeout(uint32_t id, void *param)=0;
+//private:
+//	g_timer_t *_stw;
+//	static void proc(uint32_t id, void *client, void *param);
+//};
 
 class dummy_lock
 {

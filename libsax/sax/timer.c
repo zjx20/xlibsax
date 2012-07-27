@@ -1,284 +1,222 @@
+#include <stdlib.h>
 #include "timer.h"
+#include "compiler.h"
+#include "mempool.h"
 #include "os_api.h"
 
-#include <memory.h>
-#include <stdlib.h>
+typedef struct timer_node timer_node;
 
-#pragma pack(4)
-typedef struct timer_link 
+struct timer_node
 {
-	struct timer_link *prev;
-	struct timer_link *next;
-} timer_link;
-
-/// @brief a timer node for the time list
-typedef struct timer_node 
-{
-	timer_link chain;
-	g_timer_event func;
-	void *client;
-	void *param;
-	uint64_t dead_usec;
-} timer_node;
-
-/// @brief Timer Wheel Structure used to manage the timer wheel
-/// and keep stats to help understand performance
-struct g_timer_t {
-	uint32_t capacity;
-	uint32_t wheel_size;
-	uint32_t granularity;
-	uint32_t spoke_index;
-	uint64_t bench_usec;
-	timer_node *nodes;
-	timer_link *spokes;
-	timer_link  idles;
-	g_mutex_t  *mutex;
+	timer_node* next;
+	timer_node* prev;
+	g_timer_proc func;
+	void* user_data;
+	uint32_t expire;
 };
-#pragma pack()
 
-g_timer_t *g_timer_create(
-	uint32_t capacity, uint32_t wheel_size, uint32_t granularity)
+typedef struct g_timer_t
 {
-	if (capacity && wheel_size>=32 && 
-		wheel_size<=4096 && granularity>=1 && granularity<=1000)
-	{
-		timer_link *last;
-		uint32_t i;
-		
-		g_timer_t *stw = (g_timer_t *) malloc(sizeof(g_timer_t));
-		if (!stw) return NULL;
-		
-		stw->nodes = (timer_node *) calloc(capacity, sizeof(timer_node));
-		stw->spokes = (timer_link *) malloc(wheel_size*sizeof(timer_link));
-		stw->mutex = g_mutex_init();
-		if (!stw->nodes || !stw->spokes || !stw->mutex) 
-		{
-			g_timer_destroy(stw); return NULL;
-		}
-		
-		// initialize spoke list
-		for (i=0; i<wheel_size; i++)
-		{
-			timer_link *spoke = &stw->spokes[i];
-			spoke->prev = spoke->next = spoke;
-		}
-		
-		// initialize idle list
-		last = &stw->idles;
-		for (i=0; i<capacity; i++)
-		{
-			timer_link *tmr = &stw->nodes[i].chain;
-			last->next = tmr;
-			tmr->prev = last;
-			last = tmr; // loop to next
-		}
-		last->next = &stw->idles;
-		stw->idles.prev = last;
-		
-		stw->bench_usec = g_now_hr();
-		stw->spoke_index = 0;
-		
-		stw->capacity = capacity;
-		stw->wheel_size = wheel_size;
-		stw->granularity = granularity*1000;
-		return stw;
+	timer_node* lv1;
+	timer_node* lv2;
+	timer_node* lv3;
+	timer_node* lv4;
+	g_xslab_t* pool;
+	uint32_t last;
+	uint32_t count;
+	int32_t destroying;
+} g_timer_t;
+
+static void remove_node(timer_node* node)
+{
+	node->prev->next = node->next;
+	node->next->prev = node->prev;
+	node->prev = node->next = NULL;
+}
+
+static void schedule(g_timer_t* t, timer_node* node, uint32_t delay_ms)
+{
+	timer_node* list_head;
+
+	if (delay_ms <= 0x0ffFF) {
+		if (delay_ms > 0x0FF)
+		{ /*lv2*/ list_head = &t->lv2[(node->expire >> 8) & 0x0FF]; }
+		else
+		{ /*lv1*/ list_head = &t->lv1[(node->expire >> 0) & 0x0FF]; }
 	}
+	else {
+		if (delay_ms <= 0x0FFffFF)
+		{ /*lv3*/ list_head = &t->lv3[(node->expire >> 16) & 0x0FF]; }
+		else
+		{ /*lv4*/ list_head = &t->lv4[(node->expire >> 24) & 0x0FF]; }
+	}
+
+	list_head->next->prev = node;
+	node->next = list_head->next;
+	list_head->next = node;
+	node->prev = list_head;
+}
+
+static void reschedule(g_timer_t* t, timer_node* list_head, uint32_t now)
+{
+	timer_node* node = list_head->next;
+	while (node != list_head) {
+		timer_node* tmp = node->next;
+		schedule(t, node, node->expire - now);
+		node = tmp;
+	}
+	list_head->next = list_head->prev = list_head;
+}
+
+static void fire(g_timer_t* t, timer_node* list_head)
+{
+	timer_node* node = list_head->next;
+	while (node != list_head) {
+		timer_node* tmp = node->next;
+		remove_node(node);
+
+		node->func((g_timer_handle_t) node, node->user_data);
+
+		g_xslab_free(t->pool, node);
+		node = tmp;
+		--(t->count);
+	}
+}
+
+g_timer_t* g_timer_create(uint32_t now_ms)
+{
+	g_timer_t* timer = (g_timer_t*) malloc(sizeof(g_timer_t));
+	if (timer == NULL) return NULL;
+
+	timer->lv1 = (timer_node*) malloc(4 * 256 * sizeof(timer_node));
+	timer->pool = g_xslab_init(sizeof(timer_node));
+	if (timer == NULL || timer->pool == NULL) {
+		goto failed;
+	}
+
+	if (now_ms == 0) now_ms = (uint32_t) g_now_ms();
+
+	timer->last = now_ms;
+	timer->count = 0;
+	timer->destroying = 0;
+
+	int32_t i;
+	for (i = 0; i < 4 * 256; i++) {
+		timer->lv1[i].next = timer->lv1[i].prev = &timer->lv1[i];
+	}
+
+	timer->lv2 = timer->lv1 + 256;
+	timer->lv3 = timer->lv2 + 256;
+	timer->lv4 = timer->lv3 + 256;
+
+	return timer;
+
+failed:
+	if (timer != NULL && timer->lv1 != NULL) free(timer->lv1);
+	if (timer != NULL && timer->pool != NULL) g_xslab_destroy(timer->pool);
+	if (timer != NULL) free(timer);
+
 	return NULL;
 }
 
-void g_timer_destroy(g_timer_t *stw)
+void g_timer_destroy(g_timer_t* t, int32_t fire_all)
 {
-	if (stw) {
-		if (stw->spokes) free(stw->spokes);
-		if (stw->nodes) free(stw->nodes);
-		if (stw->mutex) g_mutex_free(stw->mutex);
-		free(stw);
-	}
-}
+	t->destroying = 1;	// not allow adding new timer
 
-// event_node_s/event_list_s are designed for a vector.
-// they cache the events and call together later.
-// this trick reduces the thread-context switching.
-// ---optimized by Qingshan, 2010/3/15
-typedef struct {
-	g_timer_event func;
-	void *client;
-	void *param;
-	uint32_t id;
-} event_node_s;
-
-typedef struct {
-	uint32_t capacity;
-	uint32_t size;
-	event_node_s node[0];
-} event_list_s;
-
-static event_list_s *event_list_add(
-	event_list_s *el, uint32_t id, const timer_node *node)
-{
-	event_node_s *s;
-	if (!el) {
-		const uint32_t cap = 256;
-		el = (event_list_s *) malloc(
-			sizeof(event_list_s) + cap*sizeof(event_node_s));
-		if (!el) return NULL;
-		el->size = 0;
-		el->capacity = cap;
-	}
-	else if (el->size == el->capacity) {
-		uint32_t cap = el->capacity*2;
-		event_list_s *neu = (event_list_s *) realloc(el, 
-			sizeof(event_list_s) + cap*sizeof(event_node_s));
-		if (!neu) return el; // todo, handle the error
-		(el = neu)->capacity = cap;
-	}
-	s = &el->node[el->size++];
-	s->id = id;
-	s->func = node->func;
-	s->client = node->client;
-	s->param = node->param;
-	return el;
-}
-
-static void event_list_end(event_list_s *el)
-{
-	uint32_t i = 0;
-	for (; i < el->size; i++) {
-		event_node_s *s = &el->node[i];
-		s->func(s->id, s->client, s->param);
-	}
-	free(el);
-}
-
-void g_timer_loop(g_timer_t *stw)
-{
-	event_list_s *el = NULL;
-	uint64_t acc, now; 
-	g_mutex_enter(stw->mutex);
-	
-	acc = stw->bench_usec + stw->granularity;
-	now = g_now_hr();
-	while (acc <= now)
-	{
-		timer_link *spoke, *tmr;
-		timer_node *node;
-		
-		// advance the index to the next spoke
-		stw->bench_usec = acc;
-		stw->spoke_index = (stw->spoke_index + 1 ) % stw->wheel_size;
-		acc += stw->granularity;
-		
-		// process the spoke
-		spoke = &stw->spokes[stw->spoke_index];
-		tmr = spoke->next;
-		
-		// removing timers that have expired
-		while (tmr != spoke && 
-			(node = (timer_node *) tmr)->dead_usec < acc) 
-		{
-			long id = ((long)node - (long)stw->nodes)/sizeof(timer_node)+1;
-			
-			// remove from spoke list
-			timer_link *prev = tmr->prev;
-			timer_link *next = tmr->next;
-			prev->next = next;
-			next->prev = prev;
-			
-			// add callback etc. to event_list_s
-			el = event_list_add(el, id, node);
-			node->func = NULL;
-			
-			// add node to idle list
-			stw->idles.prev->next = tmr;
-			tmr->next = &stw->idles;
-			tmr->prev = stw->idles.prev;
-			stw->idles.prev = tmr;
-			
-			tmr = next; // loop to next
+	int32_t i;
+	if (fire_all) {
+		for (i = 0; i < 4 * 256; i++) {
+			timer_node* list_head = &t->lv1[i];
+			fire(t, list_head);
 		}
 	}
-	g_mutex_leave(stw->mutex);
-	if (el) event_list_end(el);
-}
-
-uint32_t g_timer_start(g_timer_t *stw, uint32_t delay, 
-	g_timer_event func, void *client, void *param)
-{ 
-	timer_link *idle = &stw->idles;
-	timer_link *tmr;
-	uint32_t id = 0;
-	g_mutex_enter(stw->mutex);
-	
-	if (NULL != func && (tmr = idle->next) != idle) 
-	{
-		uint64_t dead_usec = g_now_hr() + delay*1000;
-		uint32_t u = dead_usec - stw->bench_usec;
-		uint32_t t = (u < stw->granularity ? 1 : u/stw->granularity);
-		uint32_t j = ((stw->spoke_index + t) % stw->wheel_size);
-		
-		timer_link *spoke = &stw->spokes[j];
-		timer_link *last = spoke->prev;
-		timer_node *node = (timer_node *) tmr;
-		
-		// remove from idle list
-		timer_link *prev = tmr->prev;
-		timer_link *next = tmr->next;
-		prev->next = next;
-		next->prev = prev;
-		
-		// finds the nice position of spoke
-		for (; spoke != last; last = last->prev) {
-			timer_node *p = (timer_node *) last;
-			if (dead_usec >= p->dead_usec) break;
+	else {
+		// just recycle timer_node
+		for (i = 0; i < 4 * 256; i++) {
+			timer_node* list_head = &t->lv1[i];
+			timer_node* node = list_head->next;
+			while (node != list_head) {
+				timer_node* tmp = node->next;
+				g_xslab_free(t->pool, node);
+				node = tmp;
+			}
 		}
-		
-		// adds to the nice position
-		tmr->next = last->next;
-		tmr->prev = last;
-		last->next->prev = tmr;
-		last->next  = tmr;
-		
-		node->dead_usec = dead_usec;
-		node->func = func;
-		node->client = client;
-		node->param = param;
-		
-		id = ((long)node - (long)stw->nodes)/sizeof(timer_node)+1;
 	}
-	
-	g_mutex_leave(stw->mutex);
-	return id;
+
+	g_xslab_destroy(t->pool);
+	free(t->lv1);
+	free(t);
 }
 
-int g_timer_cancel(g_timer_t *stw, uint32_t id)
+g_timer_handle_t g_timer_start(g_timer_t* t, uint32_t delay_ms,
+		g_timer_proc func, void* user_data)
 {
-	if (id && id <= stw->capacity) 
-	{
-		timer_node *node = &stw->nodes[id-1];
-		g_mutex_enter(stw->mutex);
-		
-		if (NULL == node->func) {
-			id = 0; // already in the idle list?
+	if (UNLIKELY(t->destroying)) return NULL;
+
+	timer_node* node = (timer_node*) g_xslab_alloc(t->pool);
+	if (UNLIKELY(node == NULL)) return NULL;
+
+	node->func = func;
+	node->user_data = user_data;
+	node->expire = t->last + delay_ms;
+
+	schedule(t, node, delay_ms);
+
+	++(t->count);
+
+	return (g_timer_handle_t) node;
+}
+
+int32_t g_timer_cancel(g_timer_t* t, g_timer_handle_t handle, void** user_data)
+{
+	timer_node* node = (timer_node*) handle;
+
+	if (node->next == NULL) return 1;
+
+	if (user_data) *user_data = node->user_data;
+
+	--(t->count);
+	remove_node(node);
+	g_xslab_free(t->pool, node);
+
+	return 0;
+}
+
+void g_timer_poll(g_timer_t* t, uint32_t now_ms)
+{
+	if (now_ms == 0) now_ms = (uint32_t) g_now_ms();
+	while (t->last < now_ms) {
+		++(t->last);
+		timer_node* list_head;
+		if (LIKELY(t->last & 0x0FF)) {
+			list_head = &t->lv1[t->last & 0x0FF];
+		}
+		else if (LIKELY(t->last & 0x0ffFF)) {
+			reschedule(t, &t->lv2[(t->last >> 8) & 0x0FF], t->last);
+			list_head = &t->lv1[0];
+		}
+		else if (LIKELY(t->last & 0x0FFffFF)) {
+			reschedule(t, &t->lv3[(t->last >> 16) & 0x0FF], t->last);
+			reschedule(t, &t->lv2[0], t->last);
+			list_head = &t->lv1[0];
 		}
 		else {
-			timer_link *tmr = &node->chain;
-			
-			// remove from spoke list
-			timer_link *prev = tmr->prev;
-			timer_link *next = tmr->next;
-			prev->next = next;
-			next->prev = prev;
-			
-			// append to idle list
-			stw->idles.prev->next = tmr;
-			tmr->next = &stw->idles;
-			tmr->prev = stw->idles.prev;
-			stw->idles.prev = tmr;
-			
-			node->func = NULL;
+			reschedule(t, &t->lv4[(t->last >> 24) & 0x0FF], t->last);
+			reschedule(t, &t->lv3[0], t->last);
+			reschedule(t, &t->lv2[0], t->last);
+			list_head = &t->lv1[0];
 		}
-		g_mutex_leave(stw->mutex);
-		return id;
+
+		fire(t, list_head);
 	}
-	return 0;
+}
+
+uint32_t g_timer_count(g_timer_t* t)
+{
+	return t->count;
+}
+
+void g_timer_shrink_mempool(g_timer_t* t, double keep)
+{
+	g_xslab_shrink(t->pool, keep);
 }

@@ -28,9 +28,9 @@ CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP
 LIB = 
 
 ifdef DEBUG
-CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0
+CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0 -fstrict-aliasing
 else
-CCFLAGS += -O3 -DNDEBUG
+CCFLAGS += -O3 -DNDEBUG -fstrict-aliasing
 endif
 
 ifdef WINDIR

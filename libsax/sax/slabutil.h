@@ -144,7 +144,7 @@ inline T* slab_new()
 {
 	slab_t& slab = slab_holder<sizeof(T)>::get_slab();
 	void* ptr = slab.alloc();
-	if (LIKELY(ptr != NULL)) {
+	if (LIKELY(ptr)) {
 		return new (ptr) T();
 	}
 	return NULL;

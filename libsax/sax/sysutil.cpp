@@ -76,11 +76,11 @@ void thread_mgr::stop()
 }
 
 
-void timer_base::proc(uint32_t id, void *client, void *param)
-{
-	timer_base *t = (timer_base *) client;
-	t->on_timeout(id, param);
-}
+//void timer_base::proc(uint32_t id, void *client, void *param)
+//{
+//	timer_base *t = (timer_base *) client;
+//	t->on_timeout(id, param);
+//}
 
 } // namespace
 
