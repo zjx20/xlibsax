@@ -72,13 +72,12 @@ static void fire(g_timer_t* t, timer_node* list_head)
 {
 	timer_node* node = list_head->next;
 	while (node != list_head) {
-		timer_node* tmp = node->next;
 		remove_node(node);
 
 		node->func((g_timer_handle_t) node, node->user_data);
 
 		g_xslab_free(t->pool, node);
-		node = tmp;
+		node = list_head->next;
 		--(t->count);
 	}
 }
@@ -171,7 +170,8 @@ int32_t g_timer_cancel(g_timer_t* t, g_timer_handle_t handle, void** user_data)
 {
 	timer_node* node = (timer_node*) handle;
 
-	if (node->next == NULL) return 1;
+	// don't use node->next to check, xslab pool use it
+	if (node->prev == NULL) return 1;
 
 	if (user_data) *user_data = node->user_data;
 
