@@ -1,5 +1,6 @@
 #include <sax/os_api.h>
 #include <sax/timer.h>
+#include <sax/stage/stimer.h>
 
 #include <stdio.h>
 
@@ -204,6 +205,86 @@ TEST(timer, cancel_when_firing)
 	ASSERT_EQ(101, c);
 
 	g_timer_destroy(timer, 0);
+}
+
+class test_handler : public sax::handler_base
+{
+public:
+	virtual bool init(void* param) {return true;}
+	virtual void on_start(int32_t thread_id) {printf("test_handler started, thread id: %d.\n", thread_id);}
+	virtual void on_finish(int32_t thread_id) {printf("test_handler finished, thread id: %d.\n", thread_id);}
+	virtual ~test_handler() {}
+
+	virtual void on_event(const sax::event_type *ev)
+	{
+		switch(ev->get_type())
+		{
+		case sax::timer_timeout_event::ID:
+		{
+			sax::timer_timeout_event* event = (sax::timer_timeout_event*) ev;
+			printf("test_handler recv timer_timeout_event. trans_id: %lu.\n", event->trans_id);
+			(*((int*)event->invoke_param))++;
+			break;
+		}
+		default:
+			assert(0);
+			break;
+		}
+	}
+};
+
+TEST(stimer, basic_test)
+{
+	sax::stage* test_stage = sax::create_stage<test_handler, sax::thread_obj>(
+			"test_stage", 4, NULL, new sax::default_dispatcher());
+
+	sax::stage* timer = sax::get_global_stimer();
+
+	volatile int a = 100;
+
+	sax::add_timer_event* ev = sax::add_timer_event::new_event();
+	ev->biz_stage = test_stage;
+	ev->delay_ms = 50;
+	ev->invoke_param = (void*)&a;
+	timer->push_event(ev);
+
+	g_thread_sleep(0.051);
+	ASSERT_EQ(101, a);
+
+	ev = sax::add_timer_event::new_event();
+	ev->biz_stage = test_stage;
+	ev->delay_ms = 50;
+	ev->invoke_param = (void*)&a;
+	timer->push_event(ev);
+
+	ev = sax::add_timer_event::new_event();
+	ev->biz_stage = test_stage;
+	ev->delay_ms = 51;
+	ev->invoke_param = (void*)&a;
+	timer->push_event(ev);
+
+	ev = sax::add_timer_event::new_event();
+	ev->biz_stage = test_stage;
+	ev->delay_ms = 150;
+	ev->invoke_param = (void*)&a;
+	timer->push_event(ev);
+
+	ev = sax::add_timer_event::new_event();
+	ev->biz_stage = test_stage;
+	ev->delay_ms = 1500;
+	ev->invoke_param = (void*)&a;
+	timer->push_event(ev);
+
+	g_thread_sleep(0.100);
+	ASSERT_EQ(103, a);
+
+	g_thread_sleep(0.100);
+	ASSERT_EQ(104, a);
+
+	g_thread_sleep(1.500);
+	ASSERT_EQ(105, a);
+
+	sax::stage_mgr::get_instance()->stop_all();
 }
 
 int main( int argc, char *argv[] )

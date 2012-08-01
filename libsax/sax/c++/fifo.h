@@ -5,6 +5,7 @@
  * a thread-safe fifo queue
  */
 
+#include <memory>
 #include "sax/sysutil.h"
 #include "sax/compiler.h"
 #include "nocopy.h"

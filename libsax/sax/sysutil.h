@@ -117,8 +117,7 @@ private:
 class spin_type
 {
 public:
-	friend class auto_rwlock;
-	inline  spin_type(int spin_times = 16) {_pi=g_spin_init(); _spin_times = spin_times;}
+	inline spin_type(int spin_times = 8) {_pi=g_spin_init(); _spin_times = spin_times;}
 	inline ~spin_type() {g_spin_free(_pi);}
 	inline void enter() {g_spin_enter(_pi, _spin_times);}
 	inline void leave() {g_spin_leave(_pi);}

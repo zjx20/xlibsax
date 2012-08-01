@@ -18,4 +18,10 @@
 #define UNUSED_PARAMETER(x) (void)(x)
 #endif//UNUSED_PARAMETER
 
+#if SUPPORT_STATIC_ASSERT
+#define STATIC_ASSERT(expr, msg) static_assert(expr, #msg)
+#else
+#define STATIC_ASSERT(expr, msg) typedef struct {char _static_assert_error__##msg[(expr)?1:-1];} compile_error##__LINE__##msg;
+#endif
+
 #endif /* COMPILER_H_ */
