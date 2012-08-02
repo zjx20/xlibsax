@@ -1,35 +1,102 @@
-#include <sax/c++/stage.h>
+#include <sax/stage/stage.h>
 #include <stdio.h>
+#include <string>
 
-class myhandler : public sax::handler_base
+volatile size_t sink_counter = 0;
+volatile size_t source_counter = 0;
+
+struct test_event : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event>
 {
-	virtual bool init(sax::timer_base *timer, void* param) {return true;}
-	virtual void on_start(int thread_id) {printf("start: %d\n", thread_id);}
-	virtual void on_event(const sax::event_type *ev, int thread_id) {printf("%d: t=%d, p=%p\n", thread_id, ev->get_type(), ev);}
-	virtual void on_finish(int thread_id) {printf("finish: %d\n", thread_id);}
-	virtual ~myhandler() {}
+	int a,b;
+	std::string* s;
 };
 
-struct myevent : public sax::event_base<100>
+struct test_event1 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event1>
 {
-	int x, y;
-	double z;
+	int a;
+	std::string* s;
+};
+
+struct test_event2 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event2>
+{
+	int a,b;
+};
+
+class source : public sax::handler_base
+{
+	virtual bool init(void* param) {_dest = (sax::stage*)param; return true;}
+	virtual void on_start(int thread_id)
+	{
+		printf("source start: %d\n", thread_id);
+
+		while (1) {
+			test_event* ev = test_event::new_event();
+			_dest->push_event(ev);
+			source_counter++;
+			if (source_counter % 100000 == 0) {
+				g_thread_sleep(0.01);
+			}
+		}
+	}
+	virtual void on_event(const sax::event_type *ev) {}
+	virtual void on_finish(int thread_id) {printf("source finish: %d\n", thread_id);}
+	virtual ~source() {}
+private:
+	sax::stage* _dest;
+};
+
+class sink : public sax::handler_base
+{
+	virtual bool init(void* param) {return true;}
+	virtual void on_start(int thread_id) {printf("sink start: %d\n", thread_id);}
+	virtual void on_event(const sax::event_type *ev)
+	{
+		sink_counter++;
+	}
+	virtual void on_finish(int thread_id) {printf("sink finish: %d\n", thread_id);}
+	virtual ~sink() {}
+};
+
+class midware : public sax::handler_base
+{
+public:
+	virtual bool init(void* param) {_dest = (sax::stage*)param; return true;}
+	virtual void on_start(int thread_id) {printf("midware start: %d\n", thread_id);}
+	virtual void on_event(const sax::event_type *ev)
+	{
+		test_event1* ev1 = test_event1::new_event();
+		_dest->push_event(ev1);
+	}
+	virtual void on_finish(int thread_id) {printf("midware finish: %d\n", thread_id);}
+	virtual ~midware() {}
+private:
+	sax::stage* _dest;
 };
 
 int main( int argc, char *argv[] )
 {
-	sax::stage *s = sax::create_stage<myhandler>(
-		"my_stage_%d", 16, 3, false, 1024*1024, NULL);
-	myevent *e;
-	
-	e = s->new_event<myevent>();
-	printf( "ev=%p\n", e);
-	s->push_event(e);
+	sax::stage* ssink = sax::create_stage<sink, sax::thread_obj>(
+			"sink", 1, NULL, new sax::single_dispatcher());
 
-	e = s->new_event<myevent>();
-	printf( "ev=%p\n", e);
-	s->push_event(e);
+	sax::stage* smid = sax::create_stage<midware, sax::thread_obj>(
+			"midware", 2, ssink, new sax::default_dispatcher());
+
+	sax::stage* ssource = sax::create_stage<source, sax::thread_obj>(
+			"source", 1, smid, new sax::single_dispatcher());
 	
-	getchar();
-	delete s; return 0;
+	size_t last_sink_counter = sink_counter;
+	size_t last_source_counter = source_counter;
+	while (1) {
+		g_thread_sleep(1);
+		size_t curr_sink_counter = sink_counter;
+		size_t curr_source_counter = source_counter;
+		printf("source: %lu sink: %lu source_rate: %lu sink_rate: %lu\n",
+				curr_source_counter, curr_sink_counter,
+				curr_source_counter - last_source_counter,
+				curr_sink_counter - last_sink_counter);
+		last_sink_counter = curr_sink_counter;
+		last_source_counter = curr_source_counter;
+	}
+
+	return 0;
 }

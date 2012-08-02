@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include <memory>
 #include "os_types.h"
 #include "mempool.h"
 #include "sysutil.h"
@@ -19,14 +20,14 @@ public:
 
 	inline void shrink(double keep)
 	{
-		g_spin_enter(_lock, 4);
+		g_spin_enter(_lock, 128);
 		g_xslab_shrink(_slab, keep);
 		g_spin_leave(_lock);
 	}
 
 	inline void* alloc()
 	{
-		g_spin_enter(_lock, 4);
+		g_spin_enter(_lock, 128);
 		void* ptr = g_xslab_alloc(_slab);
 		g_spin_leave(_lock);
 		return ptr;
@@ -34,7 +35,7 @@ public:
 
 	inline void free(void* ptr)
 	{
-		g_spin_enter(_lock, 4);
+		g_spin_enter(_lock, 128);
 		g_xslab_free(_slab, ptr);
 		g_spin_leave(_lock);
 	}
@@ -273,7 +274,9 @@ public:
 
 #define SLAB_DELETE(type, obj_ptr) delete static_cast<type*>(obj_ptr)
 
-typedef std::allocator slab_stl_allocator;
+template<typename _Tp>
+class slab_stl_allocator : public std::allocator<_Tp>
+{};
 
 #endif
 

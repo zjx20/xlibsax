@@ -16,7 +16,7 @@ struct event_type {
 public:
 	enum
 	{
-		BIZ_TYPE_START = 10240
+		USER_TYPE_START = 10240
 	};
 public:
 	inline int get_type() const {return type_id;}
@@ -27,12 +27,12 @@ protected:
 	int32_t type_id;
 };
 
-template<int TID, typename REAL_TYPE>
-class event_base : public event_type
+template <int TID, typename REAL_TYPE>
+class sax_event_base : public event_type
 {
 public:
 	enum {ID = TID};
-	virtual ~event_base() {}
+	virtual ~sax_event_base() {}
 
 	static REAL_TYPE* new_event()
 	{
@@ -45,7 +45,28 @@ public:
 	}
 
 protected:
-	inline event_base() : event_type(TID) {}
+	inline sax_event_base() : event_type(TID) {}
+};
+
+template <int TID, typename REAL_TYPE>
+class user_event_base : public event_type
+{
+public:
+	enum {ID = TID};
+	virtual ~user_event_base() {}
+
+	static REAL_TYPE* new_event()
+	{
+		return SLAB_NEW(REAL_TYPE);
+	}
+
+	void destroy()
+	{
+		SLAB_DELETE(REAL_TYPE, this);
+	}
+
+protected:
+	inline user_event_base() : event_type(TID) {}
 };
 
 } // namespace

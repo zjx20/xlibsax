@@ -92,9 +92,10 @@ protected:
 		const char* name = (const char*)(((void**)param)[1]);
 
 		char new_name[50];
-		g_snprintf(new_name, sizeof(new_name), "%32s_%d", name, obj->_thread_id);
+		g_snprintf(new_name, sizeof(new_name), "%.32s_%d", name, obj->_thread_id);
 		g_thread_bind(-1, new_name);
 
+		// TODO: wait for all thread started, or just shutdown if create_stage() failed
 		obj->run();
 
 		free(param);
@@ -216,11 +217,12 @@ stage *create_stage(const char *name, int32_t threads, void *handler_param,
 		if (!to[i]) goto create_stage_failed;
 	}
 
+	g_snprintf(st->_name, sizeof(st->_name), "%.32s", name);
 	st->_counter = n;
 	st->_handlers = hb;
 	st->_threads = to;
 	st->_dispatcher = dispatcher;
-	g_snprintf(st->_name, sizeof(st->_name), "%32s", name);
+	st->_dispatcher->init(threads);
 	st->start();
 
 	stage_mgr::get_instance()->register_stage(st);

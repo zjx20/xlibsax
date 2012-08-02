@@ -821,13 +821,13 @@ void* g_fsb_getblock(struct fsb_pool_t *pool, uint64_t key)
 }
 
 //-----------------------------------------------------------------
-typedef struct g_xslab_t
+struct g_xslab_t
 {
 	void** head;
 	int32_t usable_amount;
 	int32_t shrink_amount;
 	int32_t alloc_size;
-} g_xslab_t;
+};
 
 g_xslab_t* g_xslab_init(int32_t size)
 {

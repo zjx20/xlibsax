@@ -15,7 +15,7 @@ struct timer_node
 	uint32_t expire;
 };
 
-typedef struct g_timer_t
+struct g_timer_t
 {
 	timer_node* lv1;
 	timer_node* lv2;
@@ -25,7 +25,7 @@ typedef struct g_timer_t
 	uint32_t last;
 	uint32_t count;
 	int32_t destroying;
-} g_timer_t;
+};
 
 static void remove_node(timer_node* node)
 {

@@ -26,7 +26,7 @@ namespace sax {
  *   invoke_param: for timer_timeout_event
  *   delay_ms: delay time, in millisecond
  */
-struct add_timer_event : public event_base<__LINE__, add_timer_event>
+struct add_timer_event : public sax_event_base<__LINE__, add_timer_event>
 {
 	size_t		trans_id;
 	stage*		biz_stage;
@@ -34,13 +34,14 @@ struct add_timer_event : public event_base<__LINE__, add_timer_event>
 	uint32_t	delay_ms;
 };
 
-struct timer_timeout_event : public event_base<__LINE__, timer_timeout_event>
+struct timer_timeout_event : public sax_event_base<__LINE__, timer_timeout_event>
 {
 	size_t	trans_id;
 	void*	invoke_param;
 };
 
-STATIC_ASSERT(__LINE__ < event_type::BIZ_TYPE_START, sax_event_type_may_greater_than__event_type_BIZ_TYPE_START);
+STATIC_ASSERT(__LINE__ < event_type::USER_TYPE_START,
+		sax_event_type_id_must_smaller_than__event_type__USER_TYPE_START);
 
 } // namespace
 

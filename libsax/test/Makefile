@@ -9,6 +9,14 @@ INC:=-I.. -I/usr/local/include -I/usr/local/include/thrift
 LIB:=-L.. -L/usr/local/lib/gtest -lsax -lpthread -lgtest -lthrift
 endif
 
+CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP
+
+ifdef RELEASE
+CCFLAGS += -O3 -DNDEBUG -fstrict-aliasing
+else
+CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0 -fstrict-aliasing
+endif
+
 all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.exe t_now.exe \
 	t_lru.exe t_lru_b.exe t_dict.exe t_md5.exe t_exp.exe t_cru.exe \
 	t_crc.exe t_a32.exe t_pool.exe t_opt.exe t_sha1.exe t_sort.exe \
@@ -16,7 +24,7 @@ all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.e
 	t_buf_transport.exe t_thrift_utility.exe t_thrift_rpc_serial.exe
 
 %: %.cpp ../libsax.a
-	$(CXX) -Wall -g -D_DEBUG -fstrict-aliasing -o $@ $< $(INC) $(LIB)
+	$(CXX) $(CCFLAGS) -o $@ $< $(INC) $(LIB)
 
 t_htab.exe:
 	$(CC) -Wall -O3 -s -o t_htab.exe t_htab.c $(INC) $(LIB)
