@@ -35,6 +35,10 @@ else
 CCFLAGS += -O3 -DNDEBUG -fstrict-aliasing
 endif
 
+ifdef PROFILE
+CCFLAGS += -pg
+endif
+
 ifdef WINDIR
 LIB = -lws2_32
 else

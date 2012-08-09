@@ -5,19 +5,21 @@
 volatile size_t sink_counter = 0;
 volatile size_t source_counter = 0;
 
+const size_t stop_counter = 10000000ull;
+
 struct test_event : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event>
 {
 	int a,b;
 	std::string* s;
 };
 
-struct test_event1 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event1>
+struct test_event1 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/2, test_event1>
 {
 	int a;
 	std::string* s;
 };
 
-struct test_event2 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event2>
+struct test_event2 : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/3, test_event2>
 {
 	int a,b;
 };
@@ -31,10 +33,14 @@ class source : public sax::handler_base
 
 		while (1) {
 			test_event* ev = test_event::new_event();
+			if (ev == NULL) printf("line:%d new event return NULL.\n", __LINE__);
 			_dest->push_event(ev);
 			source_counter++;
-			if (source_counter % 100000 == 0) {
-				g_thread_sleep(0.01);
+//			if (source_counter % 100000 == 0) {
+//				g_thread_sleep(0.01);
+//			}
+			if (source_counter >= stop_counter) {
+				break;
 			}
 		}
 	}
@@ -65,6 +71,7 @@ public:
 	virtual void on_event(const sax::event_type *ev)
 	{
 		test_event1* ev1 = test_event1::new_event();
+		if (ev1 == NULL) printf("line:%d new event return NULL.\n", __LINE__);
 		_dest->push_event(ev1);
 	}
 	virtual void on_finish(int thread_id) {printf("midware finish: %d\n", thread_id);}
@@ -76,13 +83,13 @@ private:
 int main( int argc, char *argv[] )
 {
 	sax::stage* ssink = sax::create_stage<sink, sax::thread_obj>(
-			"sink", 1, NULL, new sax::single_dispatcher());
+			"sink", 1, NULL, 102400, new sax::single_dispatcher());
 
 	sax::stage* smid = sax::create_stage<midware, sax::thread_obj>(
-			"midware", 2, ssink, new sax::default_dispatcher());
+			"midware", 2, ssink, 102400, new sax::default_dispatcher());
 
 	sax::stage* ssource = sax::create_stage<source, sax::thread_obj>(
-			"source", 1, smid, new sax::single_dispatcher());
+			"source", 1, smid, 102400, new sax::single_dispatcher());
 	
 	size_t last_sink_counter = sink_counter;
 	size_t last_source_counter = source_counter;
@@ -96,7 +103,13 @@ int main( int argc, char *argv[] )
 				curr_sink_counter - last_sink_counter);
 		last_sink_counter = curr_sink_counter;
 		last_source_counter = curr_source_counter;
+
+		if (sink_counter >= stop_counter) {
+			break;
+		}
 	}
+
+	sax::stage_mgr::get_instance()->stop_all();
 
 	return 0;
 }

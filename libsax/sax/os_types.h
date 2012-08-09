@@ -13,6 +13,8 @@
 #define __STDC_FORMAT_MACROS 1
 #endif//__STDC_FORMAT_MACROS
 
+#include <stddef.h>
+
 #ifndef _STDINT_H
 #if defined(HAVE_STDINT) || defined(__GNUC__)
 #include <stdint.h>
@@ -70,6 +72,12 @@ or just ignore it if you sure what you are doing."
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 #endif//ARRAY_SIZE
+
+#if defined(__cplusplus) || defined(c_plusplus)
+template <typename T, size_t N>
+char (&ArraySizeHelper(T (&array)[N]))[N];	// declaring a function that returning a array
+#define ARRAYSIZE(array) (sizeof(ArraySizeHelper(array)))
+#endif//
 
 #ifndef MAKE_UQUAD
 #define MAKE_UQUAD(hi, lo) \

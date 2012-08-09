@@ -17,6 +17,10 @@ else
 CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0 -fstrict-aliasing
 endif
 
+ifdef PROFILE
+CCFLAGS += -pg
+endif
+
 all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.exe t_now.exe \
 	t_lru.exe t_lru_b.exe t_dict.exe t_md5.exe t_exp.exe t_cru.exe \
 	t_crc.exe t_a32.exe t_pool.exe t_opt.exe t_sha1.exe t_sort.exe \

@@ -39,8 +39,11 @@ public:
 		_handler->on_finish(_thread_id);
 	}
 
-	bool push_event(event_type* ev)
+	bool push_event(event_type* ev, bool wait = true)
 	{
+		if (wait) {
+			return _ev_queue.push_back(ev, -1);
+		}
 		return _ev_queue.push_back(ev);
 	}
 
@@ -54,9 +57,10 @@ public:
 	}
 
 	template <class THREADOBJ, class HANDLER>
-	static THREADOBJ* new_thread_obj(const char* name, int32_t thread_id, HANDLER* handler)
+	static THREADOBJ* new_thread_obj(const char* name,
+			int32_t thread_id, HANDLER* handler, uint32_t queue_capacity)
 	{
-		THREADOBJ* tobj = new THREADOBJ(thread_id, handler);
+		THREADOBJ* tobj = new THREADOBJ(thread_id, handler, queue_capacity);
 		if (tobj != NULL) {
 			void** param = (void**) malloc(sizeof(void*) * 2);
 			param[0] = (void*)static_cast<thread_obj*>(tobj);
@@ -83,8 +87,9 @@ public:
 	}
 
 protected:
-	thread_obj(int32_t thread_id, handler_base* handler) :
-		_thread(NULL), _handler(handler), _thread_id(thread_id), _stop(false) {}
+	thread_obj(int32_t thread_id, handler_base* handler, uint32_t queue_capacity) :
+		_ev_queue(queue_capacity), _thread(NULL), _handler(handler),
+		_thread_id(thread_id), _stop(false) {}
 
 	static void* _thread_proc(void* param)
 	{
@@ -104,7 +109,7 @@ protected:
 	}
 
 protected:
-	fifo<event_type*, slab_stl_allocator<event_type*> > _ev_queue;
+	fifo<event_type*> _ev_queue;
 	g_thread_t _thread;
 	handler_base* _handler;
 	int32_t _thread_id;
@@ -118,11 +123,11 @@ public:
 	template<typename HANDLER, class THREADOBJ>
 	friend
 	stage *create_stage(const char *name, int32_t threads, void *handler_param,
-			dispatcher_base* dispatcher);
+			uint32_t queue_capacity, dispatcher_base* dispatcher);
 
-	inline bool push_event(event_type *ev)
+	inline bool push_event(event_type *ev, bool wait = true)
 	{
-		return _threads[_dispatcher->dispatch(ev)]->push_event(ev);
+		return _threads[_dispatcher->dispatch(ev)]->push_event(ev, wait);
 	}
 	
 	inline stage() : 
@@ -191,7 +196,7 @@ private:
 
 template<class HANDLER, class THREADOBJ>
 stage *create_stage(const char *name, int32_t threads, void *handler_param,
-		dispatcher_base* dispatcher)
+		uint32_t queue_capacity, dispatcher_base* dispatcher)
 {
 	if (threads <= 0) return NULL;
 	
@@ -213,7 +218,8 @@ stage *create_stage(const char *name, int32_t threads, void *handler_param,
 	}
 
 	for (i=0; i<n; i++) {
-		to[i] = thread_obj::new_thread_obj<THREADOBJ, HANDLER>(name, i, static_cast<HANDLER*>(hb[i]));
+		to[i] = thread_obj::new_thread_obj<THREADOBJ, HANDLER>(
+				name, i, static_cast<HANDLER*>(hb[i]), queue_capacity);
 		if (!to[i]) goto create_stage_failed;
 	}
 

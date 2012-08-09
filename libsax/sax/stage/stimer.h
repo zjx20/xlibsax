@@ -93,8 +93,8 @@ private:
 class stimer_threadobj : public thread_obj
 {
 public:
-	stimer_threadobj(int32_t thread_id, stimer_handler* handler) :
-		thread_obj(thread_id, handler) {}
+	stimer_threadobj(int32_t thread_id, stimer_handler* handler, uint32_t queue_capacity) :
+		thread_obj(thread_id, handler, queue_capacity) {}
 	virtual ~stimer_threadobj() {}
 
 	virtual void run()
@@ -116,7 +116,7 @@ stage* get_global_stimer()
 {
 	static stage* timer =
 			create_stage<stimer_handler, stimer_threadobj>(
-					"global_timer", 1, NULL, new single_dispatcher());
+					"global_timer", 1, NULL, 2048, new single_dispatcher());
 	return timer;
 }
 

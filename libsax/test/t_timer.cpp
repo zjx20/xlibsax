@@ -236,7 +236,7 @@ public:
 TEST(stimer, basic_test)
 {
 	sax::stage* test_stage = sax::create_stage<test_handler, sax::thread_obj>(
-			"test_stage", 4, NULL, new sax::default_dispatcher());
+			"test_stage", 4, NULL, 1024, new sax::default_dispatcher());
 
 	sax::stage* timer = sax::get_global_stimer();
 

@@ -50,7 +50,7 @@ private:
 	struct sock_mgr *_mgr;
 };
 
-struct seda_event : public event_base<0>
+struct seda_event : public sax_event_base<0>
 {
 	protocol::type proto;
 	int  port;

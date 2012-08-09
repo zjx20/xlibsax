@@ -5,118 +5,74 @@
  * a thread-safe fifo queue
  */
 
-#include <memory>
 #include "sax/sysutil.h"
+#include "sax/os_api.h"
 #include "sax/compiler.h"
 #include "nocopy.h"
 
 namespace sax {
 
-template<typename T, typename Allocator = std::allocator<T> >
+template <typename T>
 class fifo : public nocopy
 {
-	struct node
-	{
-		T value;
-		node* next;
-	};
-
-	typedef typename Allocator::template rebind<node>::other node_allocator_type;
-
 public:
-	inline fifo() : _sem((uint32_t)-1, 0)
+	inline fifo(uint32_t cap = 1024) :
+		_cap(cap), _hsem(_cap, 0), _tsem(_cap, _cap)
 	{
-		_whead = NULL;
-		_wtail = NULL;
-		_rhead = NULL;
-		_rtail = NULL;
+		_head = _tail = 0;
+		_queue = new T[_cap];
 	}
 
-	inline ~fifo() 
+	inline ~fifo()
 	{
-		if (_wtail != NULL) _wtail->next = _rhead;
-		node* n = _whead;
-		while (n != NULL) {
-			node* tmp = n->next;
-			(&n->value)->~T();
-			node_allocator_type().deallocate(n, 1);
-			n = tmp;
-		}
-
-		_whead = _wtail = NULL;
-		_rhead = _rtail = NULL;
+		delete[] _queue;
 	}
 
-	bool push_back(const T &one)
+	bool push_back(const T &one, double sec = 0)
 	{
-		node* n = node_allocator_type().allocate(1, NULL);
-		if (UNLIKELY(n == NULL)) return false;
+		if (_tsem.wait(sec)) {
+			_tlock.enter();
+			_queue[_tail++] = one;
+			if (UNLIKELY(_tail >= _cap)) _tail = 0;
+			_tlock.leave();
 
-		::new (&n->value) T(one);
-		n->next = NULL;
+			_hsem.post();
 
-		_wlock.enter();
-		if (_wtail != NULL) {
-			_wtail->next = n;
-			_wtail = n;
+			return true;
 		}
-		else {
-			_whead = _wtail = n;
-		}
-		_wlock.leave();
 
-		_sem.post();
-
-		return true;
+		return false;
 	}
 
 	// sec < 0 wait forever; sec = 0 return immediately; sec > 0 wait sec seconds
 	bool pop_front(T &one, double sec = 0)
 	{
-		if (_sem.wait(sec)) {
-			_rlock.enter();
+		if (_hsem.wait(sec)) {
+			_hlock.enter();
+			one = _queue[_head++];
+			if (UNLIKELY(_head >= _cap)) _head = 0;
+			_hlock.leave();
 
-			if (_rhead == NULL) {
-				// _sem.wait() passed, there are always have elements to pop
-				_wlock.enter();
-
-				_rhead = _whead;
-				_rtail = _wtail;
-				_whead = _wtail = NULL;
-
-				_wlock.leave();
-			}
-
-			node* n = _rhead;
-			one = n->value;
-
-			if (_rhead != _rtail) {
-				_rhead = _rhead->next;
-			}
-			else {
-				_rhead = _rtail = NULL;
-			}
-
-			(&n->value)->~T();
-			node_allocator_type().deallocate(n, 1);
-
-			_rlock.leave();
+			_tsem.post();
 
 			return true;
 		}
+
 		return false;
 	}
 
-protected:
-	node* _whead;
-	node* _wtail;
-	node* _rhead;
-	node* _rtail;
+	uint32_t get_capacity() { return _cap; }
 
 private:
-	spin_type _wlock;
-	spin_type _rlock;
-	sema_type _sem;
+	uint32_t _cap;
+	T* _queue;
+	uint32_t _head;
+	uint32_t _tail;
+
+	sema_type _hsem;
+	sema_type _tsem;
+	spin_type _hlock;
+	spin_type _tlock;
 };
 
 } //namespace

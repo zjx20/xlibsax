@@ -2224,12 +2224,7 @@ long g_lock_set(long *ptr, long new_val)
 
 long g_lock_add(long *ptr, long inc_val)
 {
-	if (inc_val > 0) {
-		return __sync_fetch_and_add(ptr, +inc_val);
-	}
-	else {
-		return __sync_fetch_and_sub(ptr, -inc_val);
-	}
+	return __sync_fetch_and_add(ptr, inc_val);
 }
 
 long g_ifeq_set(long *ptr, long cmp, long new_val)
