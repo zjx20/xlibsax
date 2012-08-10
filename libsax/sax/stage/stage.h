@@ -17,6 +17,144 @@ struct handler_base {
 	virtual ~handler_base() {}
 };
 
+class event_queue
+{
+public:
+	event_queue(uint32_t cap) : _cap(cap), _buf(NULL)
+	{
+		_buf = new char[_cap];
+		_alloc_pos = 0;
+		_free_pos = 0;
+	}
+
+	~event_queue()
+	{
+		delete[] _buf;
+		_buf = NULL;
+	}
+
+	void* allocate(uint32_t length)
+	{
+		void* ptr = NULL;
+
+		// add header size and align memory
+		uint32_t new_len = (length + sizeof(uint32_t) + sizeof(intptr_t) - 1) & (sizeof(intptr_t) - 1);
+
+		if (_alloc_pos >= _free_pos) {
+			/*
+			 * "_alloc_pos > _free_pos" means:
+			 *
+			 *   .......###########........
+			 *         ^           ^
+			 *    _free_pos   _alloc_pos
+			 *
+			 *   so there are two space blocks for allocation.
+			 *
+			 * or it is just an entire empty block, then "_free_pos == _alloc_pos".
+			 *
+			 * when "_free_pos == _alloc_pos", _alloc_pos may point to any position of the buffer.
+			 */
+
+			// try to allocate from the rear space block
+			if (_cap - _alloc_pos >= new_len) {
+				ptr = _buf + _alloc_pos;
+				_alloc_pos += new_len;
+			}
+			// try to allocate from the front space block
+			else if (_free_pos > new_len) {	// can not be "_free_pos >= length",
+											// _alloc_pos == _free_pos means empty, not full
+				ptr = _buf;
+				_alloc_pos = new_len;
+			}
+			else {
+				return NULL;
+			}
+		}
+		else {	// _alloc_pos < _free_pos
+			/*
+			 * "_alloc_pos < _free_pos" means:
+			 *
+			 *   ###..............#########...
+			 *      ^            ^         ^
+			 *  _alloc_pos   _free_pos   too small to allocate
+			 */
+
+			if (_free_pos - _alloc_pos > new_len) {	// can not be "_free_pos - _alloc_pos >= length"
+				ptr = _buf + _alloc_pos;
+				_alloc_pos += new_len;
+			}
+			else {
+				return NULL;
+			}
+		}
+
+		*((uint32_t*) ptr) = new_len;
+
+		return ptr + sizeof(uint32_t);
+	}
+
+	void free(void* ptr)
+	{
+		char* real_ptr = ((char*) ptr) - sizeof(uint32_t);
+		uint32_t length = *((uint32_t*) real_ptr);
+
+		if (LIKELY(_free_pos + length <= _cap)) {
+			assert((char*) ptr - _buf == _free_pos);
+			_free_pos += length;
+		}
+		else {
+			assert(ptr == _buf);
+			_free_pos = length;
+		}
+	}
+
+	bool push_event(event_type* ev, bool wait = true)
+	{
+		_lock.enter();
+
+		void* ptr = allocate(ev->size());
+		bool ret = false;
+
+		if (UNLIKELY(ptr == NULL)) {
+			if (wait) {
+				do {
+					_lock.leave();
+					g_thread_sleep(0.001);
+
+					_lock.enter();
+					ptr = allocate(ev->size());
+				} while(ptr == NULL);
+
+				ev->copy_to(ptr);
+				ret = true;
+			}
+		}
+		else {
+			ev->copy_to(ptr);
+			ret = true;
+		}
+
+		_lock.leave();
+
+		return ret;
+	}
+
+	event_type* pop_event()
+	{
+		if (_free_pos != _alloc_pos) {
+
+		}
+	}
+
+private:
+	uint32_t _cap;
+	char* _buf;
+	volatile uint32_t _alloc_pos;
+	volatile uint32_t _free_pos;
+
+	mutex_type _lock;
+};
+
 class thread_obj
 {
 public:
@@ -26,10 +164,12 @@ public:
 
 		double sec = 0.100;	// 100 milliseconds
 		while (1) {
-			event_type* event;
-			if (_ev_queue.pop_front(event, sec)) {
-				_handler->on_event(event);
-				event->destroy();
+			event_type* ev;
+			if (_ev_queue.pop_front(ev, sec)) {
+				_handler->on_event(ev);
+				_buf.free(ev, ev->size());
+
+				//event->destroy();
 			}
 			else {
 				if (_stop) break;
@@ -41,10 +181,7 @@ public:
 
 	bool push_event(event_type* ev, bool wait = true)
 	{
-		if (wait) {
-			return _ev_queue.push_back(ev, -1);
-		}
-		return _ev_queue.push_back(ev);
+		return _buf.push_event(ev, wait);
 	}
 
 	void signal_stop() { _stop = true; }
@@ -88,7 +225,7 @@ public:
 
 protected:
 	thread_obj(int32_t thread_id, handler_base* handler, uint32_t queue_capacity) :
-		_ev_queue(queue_capacity), _thread(NULL), _handler(handler),
+		_ev_queue(queue_capacity), _buf(queue_capacity * 8), _thread(NULL), _handler(handler),
 		_thread_id(thread_id), _stop(false) {}
 
 	static void* _thread_proc(void* param)
@@ -110,6 +247,8 @@ protected:
 
 protected:
 	fifo<event_type*> _ev_queue;
+	event_queue _buf;
+	mutex_type _lock;	// lock for _buf
 	g_thread_t _thread;
 	handler_base* _handler;
 	int32_t _thread_id;

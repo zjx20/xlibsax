@@ -32,9 +32,10 @@ class source : public sax::handler_base
 		printf("source start: %d\n", thread_id);
 
 		while (1) {
-			test_event* ev = test_event::new_event();
-			if (ev == NULL) printf("line:%d new event return NULL.\n", __LINE__);
-			_dest->push_event(ev);
+			//test_event* ev = test_event::new_event();
+			//if (ev == NULL) printf("line:%d new event return NULL.\n", __LINE__);
+			test_event ev;
+			_dest->push_event(&ev);
 			source_counter++;
 //			if (source_counter % 100000 == 0) {
 //				g_thread_sleep(0.01);
@@ -70,9 +71,10 @@ public:
 	virtual void on_start(int thread_id) {printf("midware start: %d\n", thread_id);}
 	virtual void on_event(const sax::event_type *ev)
 	{
-		test_event1* ev1 = test_event1::new_event();
-		if (ev1 == NULL) printf("line:%d new event return NULL.\n", __LINE__);
-		_dest->push_event(ev1);
+		//test_event1* ev1 = test_event1::new_event();
+		//if (ev1 == NULL) printf("line:%d new event return NULL.\n", __LINE__);
+		test_event1 ev1;
+		_dest->push_event(&ev1);
 	}
 	virtual void on_finish(int thread_id) {printf("midware finish: %d\n", thread_id);}
 	virtual ~midware() {}

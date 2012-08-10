@@ -66,8 +66,8 @@ public:
 private:
 	uint32_t _cap;
 	T* _queue;
-	uint32_t _head;
-	uint32_t _tail;
+	volatile uint32_t _head;
+	volatile uint32_t _tail;
 
 	sema_type _hsem;
 	sema_type _tsem;
