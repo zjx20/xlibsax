@@ -85,13 +85,13 @@ private:
 int main( int argc, char *argv[] )
 {
 	sax::stage* ssink = sax::create_stage<sink, sax::thread_obj>(
-			"sink", 1, NULL, 102400, new sax::single_dispatcher());
+			"sink", 1, NULL, 10*1024*1024, new sax::single_dispatcher());
 
 	sax::stage* smid = sax::create_stage<midware, sax::thread_obj>(
-			"midware", 2, ssink, 102400, new sax::default_dispatcher());
+			"midware", 2, ssink, 10*1024*1024, new sax::default_dispatcher());
 
 	sax::stage* ssource = sax::create_stage<source, sax::thread_obj>(
-			"source", 1, smid, 102400, new sax::single_dispatcher());
+			"source", 1, smid, 10*1024*1024, new sax::single_dispatcher());
 	
 	size_t last_sink_counter = sink_counter;
 	size_t last_source_counter = source_counter;

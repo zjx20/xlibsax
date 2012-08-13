@@ -19,12 +19,28 @@ struct handler_base {
 
 class event_queue
 {
-public:
-	event_queue(uint32_t cap) : _cap(cap), _buf(NULL)
+private:
+	struct event_header
 	{
+		enum state {INITIAL, ALLOCATED, COMMITTED, SKIPPED};
+		volatile state block_state;
+		uint32_t block_size;
+	};
+
+public:
+	event_queue(uint32_t cap) : _cap(cap), _buf(NULL), _lock(128)
+	{
+		assert(_cap > sizeof(event_header));
 		_buf = new char[_cap];
+
+		assert(_buf != NULL);
+
 		_alloc_pos = 0;
 		_free_pos = 0;
+
+		// set a initial state to first block to prevent bad thing
+		// when calling pop_event() at first
+		((event_header*) _buf)->block_state = event_header::INITIAL;
 	}
 
 	~event_queue()
@@ -33,14 +49,74 @@ public:
 		_buf = NULL;
 	}
 
+	bool push_event(event_type* ev, bool wait = true)
+	{
+		_lock.enter();
+		void* ptr = allocate(ev->size());
+		_lock.leave();
+
+		if (UNLIKELY(ptr == NULL)) {
+			if (UNLIKELY(wait == false)) {
+				return false;
+			}
+
+			do {
+				_lock.enter();
+				ptr = allocate(ev->size());
+				_lock.leave();
+				g_thread_sleep(0.001);	// sleep 1ms
+			} while(ptr == NULL);
+		}
+
+		ev->copy_to(((char*) ptr) + sizeof(event_header));
+
+		((event_header*) ptr)->block_state = event_header::COMMITTED;
+
+		return true;
+	}
+
+	event_type* pop_event()
+	{
+		if (UNLIKELY(_free_pos == _alloc_pos)) return NULL;
+		if (UNLIKELY(_cap - _free_pos <= sizeof(event_header))) {
+			_free_pos = 0;
+		}
+
+		do {
+			event_header::state s = ((event_header*) (_buf + _free_pos))->block_state;
+			if (LIKELY(s == event_header::COMMITTED)) {
+				return (event_type*) (_buf + _free_pos + sizeof(event_header));
+			}
+			else if (UNLIKELY(s == event_header::SKIPPED)) {
+				_free_pos = 0;
+				continue;
+			}
+			else {
+				return NULL;
+			}
+		} while(1);
+
+		// never reach
+		return NULL;
+	}
+
+	void destroy_event(event_type* ev)
+	{
+		ev->destroy();
+		this->free(((char*) ev) - sizeof(event_header));
+	}
+
+private:
 	void* allocate(uint32_t length)
 	{
 		void* ptr = NULL;
+		uint32_t new_alloc_pos(-1);
 
 		// add header size and align memory
-		uint32_t new_len = (length + sizeof(uint32_t) + sizeof(intptr_t) - 1) & (sizeof(intptr_t) - 1);
+		uint32_t new_len = (length + sizeof(event_header) + sizeof(intptr_t) - 1) &
+				(~(sizeof(intptr_t) - 1));
 
-		if (_alloc_pos >= _free_pos) {
+		if (LIKELY(_alloc_pos >= _free_pos)) {
 			/*
 			 * "_alloc_pos > _free_pos" means:
 			 *
@@ -56,15 +132,22 @@ public:
 			 */
 
 			// try to allocate from the rear space block
-			if (_cap - _alloc_pos >= new_len) {
+			if (LIKELY(_cap - _alloc_pos >= new_len)) {
 				ptr = _buf + _alloc_pos;
-				_alloc_pos += new_len;
+				new_alloc_pos = _alloc_pos + new_len;
 			}
 			// try to allocate from the front space block
-			else if (_free_pos > new_len) {	// can not be "_free_pos >= length",
-											// _alloc_pos == _free_pos means empty, not full
+			else if (LIKELY(_free_pos > new_len)) {	// can not be "_free_pos >= _new_len",
+													// _alloc_pos == _free_pos means empty, not full
+
+				// set the last block as end of 'line'
+				if (_cap - _alloc_pos >= sizeof(event_header)) {
+					event_header* last_block = (event_header*) (_buf + _alloc_pos);
+					last_block->block_state = event_header::SKIPPED;
+				}
+
 				ptr = _buf;
-				_alloc_pos = new_len;
+				new_alloc_pos = new_len;
 			}
 			else {
 				return NULL;
@@ -76,27 +159,32 @@ public:
 			 *
 			 *   ###..............#########...
 			 *      ^            ^         ^
-			 *  _alloc_pos   _free_pos   too small to allocate
+			 *   _alloc_pos  _free_pos   too small to allocate
 			 */
 
-			if (_free_pos - _alloc_pos > new_len) {	// can not be "_free_pos - _alloc_pos >= length"
+			if (_free_pos - _alloc_pos > new_len) {	// can not be "_free_pos - _alloc_pos >= new_len"
 				ptr = _buf + _alloc_pos;
-				_alloc_pos += new_len;
+				new_alloc_pos = _alloc_pos + new_len;
 			}
 			else {
 				return NULL;
 			}
 		}
 
-		*((uint32_t*) ptr) = new_len;
+		event_header* block = (event_header*) ptr;
+		block->block_state = event_header::ALLOCATED;
+		block->block_size = new_len;
 
-		return ptr + sizeof(uint32_t);
+		//assert(new_alloc_pos != (uint32_t) -1);
+		_alloc_pos = new_alloc_pos;
+
+		return ptr;
 	}
 
 	void free(void* ptr)
 	{
-		char* real_ptr = ((char*) ptr) - sizeof(uint32_t);
-		uint32_t length = *((uint32_t*) real_ptr);
+		event_header* block = (event_header*) ptr;
+		uint32_t length = block->block_size;
 
 		if (LIKELY(_free_pos + length <= _cap)) {
 			assert((char*) ptr - _buf == _free_pos);
@@ -108,51 +196,12 @@ public:
 		}
 	}
 
-	bool push_event(event_type* ev, bool wait = true)
-	{
-		_lock.enter();
-
-		void* ptr = allocate(ev->size());
-		bool ret = false;
-
-		if (UNLIKELY(ptr == NULL)) {
-			if (wait) {
-				do {
-					_lock.leave();
-					g_thread_sleep(0.001);
-
-					_lock.enter();
-					ptr = allocate(ev->size());
-				} while(ptr == NULL);
-
-				ev->copy_to(ptr);
-				ret = true;
-			}
-		}
-		else {
-			ev->copy_to(ptr);
-			ret = true;
-		}
-
-		_lock.leave();
-
-		return ret;
-	}
-
-	event_type* pop_event()
-	{
-		if (_free_pos != _alloc_pos) {
-
-		}
-	}
-
 private:
 	uint32_t _cap;
 	char* _buf;
-	volatile uint32_t _alloc_pos;
-	volatile uint32_t _free_pos;
-
-	mutex_type _lock;
+	uint32_t _alloc_pos;
+	uint32_t _free_pos;
+	spin_type _lock;
 };
 
 class thread_obj
@@ -162,17 +211,19 @@ public:
 	{
 		_handler->on_start(_thread_id);
 
-		double sec = 0.100;	// 100 milliseconds
+		uint32_t idle_count = 0;
 		while (1) {
-			event_type* ev;
-			if (_ev_queue.pop_front(ev, sec)) {
+			event_type* ev = _ev_queue.pop_event();
+			if (ev) {
 				_handler->on_event(ev);
-				_buf.free(ev, ev->size());
-
-				//event->destroy();
+				_ev_queue.destroy_event(ev);
 			}
 			else {
 				if (_stop) break;
+				if (++idle_count >= 100) {
+					g_thread_sleep(0.001);
+					idle_count = 0;
+				}
 			}
 		}
 
@@ -181,7 +232,7 @@ public:
 
 	bool push_event(event_type* ev, bool wait = true)
 	{
-		return _buf.push_event(ev, wait);
+		return _ev_queue.push_event(ev, wait);
 	}
 
 	void signal_stop() { _stop = true; }
@@ -218,14 +269,14 @@ public:
 		assert(_thread == NULL);
 
 		event_type* ev;
-		while (_ev_queue.pop_front(ev, 0)) {
-			ev->destroy();
+		while ((ev = _ev_queue.pop_event()) != NULL) {
+			_ev_queue.destroy_event(ev);
 		}
 	}
 
 protected:
 	thread_obj(int32_t thread_id, handler_base* handler, uint32_t queue_capacity) :
-		_ev_queue(queue_capacity), _buf(queue_capacity * 8), _thread(NULL), _handler(handler),
+		_ev_queue(queue_capacity), _thread(NULL), _handler(handler),
 		_thread_id(thread_id), _stop(false) {}
 
 	static void* _thread_proc(void* param)
@@ -246,9 +297,7 @@ protected:
 	}
 
 protected:
-	fifo<event_type*> _ev_queue;
-	event_queue _buf;
-	mutex_type _lock;	// lock for _buf
+	event_queue _ev_queue;
 	g_thread_t _thread;
 	handler_base* _handler;
 	int32_t _thread_id;

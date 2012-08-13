@@ -23,7 +23,7 @@ public:
 	virtual void destroy() = 0;
 	virtual uint32_t size() = 0;
 	virtual event_type* copy_to(void* ptr) = 0;
-	~event_type() {}	// declare as non-virtual intentionally
+	virtual ~event_type() {}
 protected:
 	inline event_type(int32_t id=-1) : type_id(id) {}
 	int32_t type_id;
@@ -36,14 +36,9 @@ public:
 	enum {ID = TID};
 	virtual ~sax_event_base() {}
 
-	static REAL_TYPE* new_event()
-	{
-		return SLAB_NEW(REAL_TYPE);
-	}
-
 	void destroy()
 	{
-		SLAB_DELETE(REAL_TYPE, this);
+		this->~sax_event_base();
 	}
 
 	uint32_t size()
@@ -68,14 +63,9 @@ public:
 	enum {ID = TID};
 	virtual ~user_event_base() {}
 
-	static REAL_TYPE* new_event()
-	{
-		return SLAB_NEW(REAL_TYPE);
-	}
-
 	void destroy()
 	{
-		SLAB_DELETE(REAL_TYPE, this);
+		this->~user_event_base();
 	}
 
 	uint32_t size()
