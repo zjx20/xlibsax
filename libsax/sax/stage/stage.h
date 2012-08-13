@@ -220,7 +220,7 @@ public:
 			}
 			else {
 				if (_stop) break;
-				if (++idle_count >= 100) {
+				if (++idle_count >= 10) {
 					g_thread_sleep(0.001);
 					idle_count = 0;
 				}
@@ -246,9 +246,9 @@ public:
 
 	template <class THREADOBJ, class HANDLER>
 	static THREADOBJ* new_thread_obj(const char* name,
-			int32_t thread_id, HANDLER* handler, uint32_t queue_capacity)
+			int32_t thread_id, HANDLER* handler, uint32_t queue_size)
 	{
-		THREADOBJ* tobj = new THREADOBJ(thread_id, handler, queue_capacity);
+		THREADOBJ* tobj = new THREADOBJ(thread_id, handler, queue_size);
 		if (tobj != NULL) {
 			void** param = (void**) malloc(sizeof(void*) * 2);
 			param[0] = (void*)static_cast<thread_obj*>(tobj);
@@ -275,8 +275,8 @@ public:
 	}
 
 protected:
-	thread_obj(int32_t thread_id, handler_base* handler, uint32_t queue_capacity) :
-		_ev_queue(queue_capacity), _thread(NULL), _handler(handler),
+	thread_obj(int32_t thread_id, handler_base* handler, uint32_t queue_size) :
+		_ev_queue(queue_size), _thread(NULL), _handler(handler),
 		_thread_id(thread_id), _stop(false) {}
 
 	static void* _thread_proc(void* param)
@@ -384,7 +384,7 @@ private:
 
 template<class HANDLER, class THREADOBJ>
 stage *create_stage(const char *name, int32_t threads, void *handler_param,
-		uint32_t queue_capacity, dispatcher_base* dispatcher)
+		uint32_t queue_size, dispatcher_base* dispatcher)
 {
 	if (threads <= 0) return NULL;
 	
@@ -407,7 +407,7 @@ stage *create_stage(const char *name, int32_t threads, void *handler_param,
 
 	for (i=0; i<n; i++) {
 		to[i] = thread_obj::new_thread_obj<THREADOBJ, HANDLER>(
-				name, i, static_cast<HANDLER*>(hb[i]), queue_capacity);
+				name, i, static_cast<HANDLER*>(hb[i]), queue_size);
 		if (!to[i]) goto create_stage_failed;
 	}
 

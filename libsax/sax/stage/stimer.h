@@ -48,7 +48,7 @@ public:
 		{
 			add_timer_event* event = (add_timer_event*) ev;
 
-			timer_param* p = SLAB_NEW(timer_param);
+			timer_param* p = new timer_param();
 			p->trans_id = event->trans_id;
 			p->biz_stage = event->biz_stage;
 			p->param = event->invoke_param;
@@ -77,13 +77,13 @@ private:
 		timer_param* p = (timer_param*) param;
 
 		if (LIKELY(!p->self->_destroying)) {
-			timer_timeout_event* invoke = timer_timeout_event::new_event();
-			invoke->trans_id = p->trans_id;
-			invoke->invoke_param = p->param;
-			p->biz_stage->push_event(invoke);
+			timer_timeout_event invoke;
+			invoke.trans_id = p->trans_id;
+			invoke.invoke_param = p->param;
+			p->biz_stage->push_event(&invoke);
 		}
 
-		SLAB_DELETE(timer_param, p);
+		delete p;
 	}
 
 	g_timer_t* _timer;
@@ -99,24 +99,39 @@ public:
 
 	virtual void run()
 	{
+		const int POLLING_COUNT = 10;
+		const int SLEEP_IDLE_COUNT = 10;
+		int32_t count = 0;
+		int32_t idle_count = 0;
 		double sec = 0.001;	// 1 millisecond
 		while (!_stop) {
-			event_type* event;
-			if (_ev_queue.pop_front(event, sec)) {
-				_handler->on_event(event);
-				event->destroy();
+			count++;
+			event_type* ev;
+			if ((ev = _ev_queue.pop_event()) != NULL) {
+				_handler->on_event(ev);
+				_ev_queue.destroy_event(ev);
+			}
+			else {
+				if (++idle_count >= SLEEP_IDLE_COUNT) {
+					g_thread_sleep(sec);
+					((stimer_handler*) _handler)->poll_timer();
+					idle_count = 0;
+				}
 			}
 
-			((stimer_handler*) _handler)->poll_timer();
+			if (count >= POLLING_COUNT) {
+				((stimer_handler*) _handler)->poll_timer();
+			}
 		}
 	}
 };
 
-stage* get_global_stimer()
+stage* create_stimer(size_t queue_size = 2 * 1024 * 1024)
 {
-	static stage* timer =
-			create_stage<stimer_handler, stimer_threadobj>(
-					"global_timer", 1, NULL, 2048, new single_dispatcher());
+	dispatcher_base* dispatcher = new single_dispatcher();
+	if (dispatcher == NULL) return NULL;
+	stage* timer = create_stage<stimer_handler, stimer_threadobj>(
+			"global_timer", 1, NULL, queue_size, dispatcher);
 	return timer;
 }
 

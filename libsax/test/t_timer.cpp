@@ -238,42 +238,57 @@ TEST(stimer, basic_test)
 	sax::stage* test_stage = sax::create_stage<test_handler, sax::thread_obj>(
 			"test_stage", 4, NULL, 1024, new sax::default_dispatcher());
 
-	sax::stage* timer = sax::get_global_stimer();
+	sax::stage* timer = sax::create_stimer();
 
 	volatile int a = 100;
 
-	sax::add_timer_event* ev = sax::add_timer_event::new_event();
-	ev->biz_stage = test_stage;
-	ev->delay_ms = 50;
-	ev->invoke_param = (void*)&a;
-	timer->push_event(ev);
+	{
+		sax::add_timer_event ev;
+		ev.biz_stage = test_stage;
+		ev.delay_ms = 50;
+		ev.invoke_param = (void*)&a;
+		ev.trans_id = 1;
+		timer->push_event(&ev);
+	}
 
 	g_thread_sleep(0.051);
 	ASSERT_EQ(101, a);
 
-	ev = sax::add_timer_event::new_event();
-	ev->biz_stage = test_stage;
-	ev->delay_ms = 50;
-	ev->invoke_param = (void*)&a;
-	timer->push_event(ev);
+	{
+		sax::add_timer_event ev;
+		ev.biz_stage = test_stage;
+		ev.delay_ms = 50;
+		ev.invoke_param = (void*)&a;
+		ev.trans_id = 2;
+		timer->push_event(&ev);
+	}
 
-	ev = sax::add_timer_event::new_event();
-	ev->biz_stage = test_stage;
-	ev->delay_ms = 51;
-	ev->invoke_param = (void*)&a;
-	timer->push_event(ev);
+	{
+		sax::add_timer_event ev;
+		ev.biz_stage = test_stage;
+		ev.delay_ms = 51;
+		ev.invoke_param = (void*)&a;
+		ev.trans_id = 3;
+		timer->push_event(&ev);
+	}
 
-	ev = sax::add_timer_event::new_event();
-	ev->biz_stage = test_stage;
-	ev->delay_ms = 150;
-	ev->invoke_param = (void*)&a;
-	timer->push_event(ev);
+	{
+		sax::add_timer_event ev;
+		ev.biz_stage = test_stage;
+		ev.delay_ms = 150;
+		ev.invoke_param = (void*)&a;
+		ev.trans_id = 4;
+		timer->push_event(&ev);
+	}
 
-	ev = sax::add_timer_event::new_event();
-	ev->biz_stage = test_stage;
-	ev->delay_ms = 1500;
-	ev->invoke_param = (void*)&a;
-	timer->push_event(ev);
+	{
+		sax::add_timer_event ev;
+		ev.biz_stage = test_stage;
+		ev.delay_ms = 1500;
+		ev.invoke_param = (void*)&a;
+		ev.trans_id = 5;
+		timer->push_event(&ev);
+	}
 
 	g_thread_sleep(0.100);
 	ASSERT_EQ(103, a);
