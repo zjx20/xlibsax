@@ -17,15 +17,15 @@ class dispatcher_base
 {
 public:
 	virtual ~dispatcher_base() {}
-	virtual void init(int32_t number_of_queues) = 0;
-	virtual int32_t dispatch(const event_type* ev) = 0;
+	virtual void init(uint32_t number_of_queues) = 0;
+	virtual uint32_t dispatch(int32_t event_type, uint64_t shard_key) = 0;
 };
 
 class single_dispatcher : public dispatcher_base
 {
 public:
-	inline void init(int32_t queues) {}
-	inline int32_t dispatch(const event_type* ev) { return 0; }
+	inline void init(uint32_t) {}
+	inline uint32_t dispatch(int32_t, uint64_t) { return 0; }
 };
 
 class default_dispatcher : public dispatcher_base
@@ -34,18 +34,17 @@ public:
 	default_dispatcher() : _curr(0), _queues(0) {}
 	~default_dispatcher() {}
 
-	void init(int32_t queues) { _queues = queues; }
+	void init(uint32_t number_of_queues) { _queues = number_of_queues; }
 
-	int32_t dispatch(const event_type* ev)
+	uint32_t dispatch(int32_t, uint64_t)
 	{
-		++_curr;
-		if (_curr >= _queues) _curr = 0;
+		if (++_curr >= _queues) _curr = 0;
 		return _curr;
 	}
 
 private:
-	int32_t _curr;
-	int32_t _queues;
+	uint32_t _curr;
+	uint32_t _queues;
 };
 
 } // namespace

@@ -28,7 +28,7 @@ namespace sax {
  */
 struct add_timer_event : public sax_event_base<__LINE__, add_timer_event>
 {
-	size_t		trans_id;
+	uint64_t	trans_id;
 	stage*		biz_stage;
 	void*		invoke_param;
 	uint32_t	delay_ms;
@@ -39,37 +39,38 @@ struct add_timer_event : public sax_event_base<__LINE__, add_timer_event>
  * sender: stimer stage
  * recver: any stage
  * parameters:
- *   trans_id: same as add_timer_event::trans_id
+ *   trans_id: same as add_timer_event::trans_id, and use as shard_key
  *   invoke_param: same as add_timer_event::invoke_param
  */
 struct timer_timeout_event : public sax_event_base<__LINE__, timer_timeout_event>
 {
-	size_t	trans_id;
-	void*	invoke_param;
+	uint64_t	trans_id;
+	void*		invoke_param;
 };
 
-namespace hide {
+namespace slogger {
 template <size_t BODY_SIZE>
 struct log_event
 {
 	char body[BODY_SIZE];
 };
-} // namespace hide
 
 #define DECL_LOG_EVENT(size)	\
-	template <>	struct hide::log_event<size> : public sax_event_base<__LINE__, log_event<size> > {}; \
-	typedef hide::log_event<size> log_event##size
+	template <>	struct log_event<size> : public sax_event_base<__LINE__, log_event<size> > {}; \
+	typedef log_event<size> log_event##size
 
-DECL_LOG_EVENT(64);			// log_event64
-DECL_LOG_EVENT(128);		// log_event128
-DECL_LOG_EVENT(256);		// log_event256
-DECL_LOG_EVENT(512);		// log_event512
-DECL_LOG_EVENT(1024);		// log_event1024
-DECL_LOG_EVENT(2048);		// log_event2048
-DECL_LOG_EVENT(4096);		// log_event4096
-DECL_LOG_EVENT(8192);		// log_event8192
+DECL_LOG_EVENT(64);			// sax::log_event64
+DECL_LOG_EVENT(128);		// sax::log_event128
+DECL_LOG_EVENT(256);		// sax::log_event256
+DECL_LOG_EVENT(512);		// sax::log_event512
+DECL_LOG_EVENT(1024);		// sax::log_event1024
+DECL_LOG_EVENT(2048);		// sax::log_event2048
+DECL_LOG_EVENT(4096);		// sax::log_event4096
+DECL_LOG_EVENT(8192);		// sax::log_event8192
 
 #undef DECL_LOG_EVENT
+
+} // namespace slogger
 
 STATIC_ASSERT(__LINE__ < event_type::USER_TYPE_START,
 		sax_event_type_id_must_smaller_than__event_type__USER_TYPE_START);

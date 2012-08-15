@@ -69,15 +69,18 @@ or just ignore it if you sure what you are doing."
 #endif//IS_LITTLE_ENDIAN
 
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-#endif//ARRAY_SIZE
-
 #if defined(__cplusplus) || defined(c_plusplus)
+
 template <typename T, size_t N>
-char (&ArraySizeHelper(T (&array)[N]))[N];	// declaring a function that returning a array
-#define ARRAYSIZE(array) (sizeof(ArraySizeHelper(array)))
-#endif//
+char (&ArraySizeHelper(const T (&array)[N]))[N];	// declaring a function that returning a array
+#define ARRAY_SIZE(array) (sizeof(ArraySizeHelper(array)))
+
+#else
+
+#warning "ARRAY_SIZE() is unsafe in c, use it on your own risk."
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
+#endif//ARRAY_SIZE
 
 #ifndef MAKE_UQUAD
 #define MAKE_UQUAD(hi, lo) \

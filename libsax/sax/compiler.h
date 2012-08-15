@@ -18,10 +18,27 @@
 #define UNUSED_PARAMETER(x) (void)(x)
 #endif//UNUSED_PARAMETER
 
+//STATIC_ASSERT
 #if SUPPORT_STATIC_ASSERT
 #define STATIC_ASSERT(expr, msg) static_assert(expr, #msg)
+#elif defined(__cplusplus) || defined(c_plusplus)
+
+template <bool flag>
+class __static_assert_helper;
+
+template <>
+class __static_assert_helper<true> {};
+
+#define STATIC_ASSERT(expr, msg) \
+	typedef struct \
+	{ __static_assert_helper<bool(expr)> _static_assert_error__##msg[bool(expr)?1:-1]; } \
+	compile_error##__LINE__##msg;
+
 #else
 #define STATIC_ASSERT(expr, msg) typedef struct {char _static_assert_error__##msg[(expr)?1:-1];} compile_error##__LINE__##msg;
+#endif//STATIC_ASSERT
+
+#if defined(__cplusplus) || defined(c_plusplus)
 #endif
 
 #endif /* COMPILER_H_ */

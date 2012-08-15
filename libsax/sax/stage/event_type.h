@@ -8,7 +8,7 @@
 #ifndef EVENT_TYPE_H_
 #define EVENT_TYPE_H_
 
-#include "sax/slabutil.h"
+#include "sax/compiler.h"
 
 namespace sax {
 
@@ -21,13 +21,13 @@ public:
 public:
 	inline int get_type() const {return type_id;}
 	virtual void destroy() = 0;
-	virtual uint32_t size() = 0;
-	virtual event_type* copy_to(void* ptr) = 0;
 	virtual ~event_type() {}
 protected:
 	inline event_type(int32_t id=-1) : type_id(id) {}
 	int32_t type_id;
 };
+
+// TODO: add static assert for user_event_base::ID, must be smaller than event_type::USER_TYPE_START
 
 template <int TID, typename REAL_TYPE>
 class sax_event_base : public event_type
@@ -38,18 +38,7 @@ public:
 
 	void destroy()
 	{
-		this->~sax_event_base();
-	}
-
-	uint32_t size()
-	{
-		return sizeof(REAL_TYPE);
-	}
-
-	event_type* copy_to(void* ptr)
-	{
-		const REAL_TYPE* obj = static_cast<const REAL_TYPE*>(this);
-		return static_cast<event_type*>(new (ptr) REAL_TYPE(*obj));
+		static_cast<const REAL_TYPE*>(this)->~REAL_TYPE();
 	}
 
 protected:
@@ -65,18 +54,7 @@ public:
 
 	void destroy()
 	{
-		this->~user_event_base();
-	}
-
-	uint32_t size()
-	{
-		return sizeof(REAL_TYPE);
-	}
-
-	event_type* copy_to(void* ptr)
-	{
-		const REAL_TYPE* obj = static_cast<const REAL_TYPE*>(this);
-		return static_cast<event_type*>(new (ptr) REAL_TYPE(*obj));
+		static_cast<const REAL_TYPE*>(this)->~REAL_TYPE();
 	}
 
 protected:
