@@ -57,8 +57,8 @@ struct log_event
 } // namespace hide
 
 #define DECL_LOG_EVENT(size)	\
-	template <>	struct hide::log_event<64> : public sax_event_base<__LINE__, log_event<64> > {}; \
-	typedef hide::log_event<64> log_event##size;
+	template <>	struct hide::log_event<size> : public sax_event_base<__LINE__, log_event<size> > {}; \
+	typedef hide::log_event<size> log_event##size
 
 DECL_LOG_EVENT(64);			// log_event64
 DECL_LOG_EVENT(128);		// log_event128
