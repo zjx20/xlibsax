@@ -16,16 +16,6 @@
 #include "sax/os_types.h"
 #include "sax/sysutil.h"
 
-//template <typename type>
-//type ZERO_IF_X(bool x, type value) {return x?0:value;}
-#define ZERO_IF_X(x, value, type) \
-	((-((type)!(x))) & (type)(value))
-
-//template <typename type>
-//type SELECT(bool x, type a, type b) {return x?a:b;}
-#define SELECT_X(x, a, b, type) \
-	(ZERO_IF_X(!x, a, type) | ZERO_IF_X(x, b, type))
-
 namespace sax {
 
 class event_queue
@@ -201,8 +191,5 @@ private:
 };
 
 } // namespace sax
-
-#undef SELECT_X
-#undef ZERO_IF_X
 
 #endif /* EVENT_QUEUE_H_ */
