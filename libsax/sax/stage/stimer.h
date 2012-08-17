@@ -81,7 +81,7 @@ private:
 					p->biz_stage->allocate_event<timer_timeout_event>(p->trans_id);
 			invoke->trans_id = p->trans_id;
 			invoke->invoke_param = p->param;
-			p->biz_stage->commit_event(invoke);
+			p->biz_stage->push_event(invoke);
 		}
 
 		delete p;

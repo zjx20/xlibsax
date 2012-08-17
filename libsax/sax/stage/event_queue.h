@@ -16,6 +16,16 @@
 #include "sax/os_types.h"
 #include "sax/sysutil.h"
 
+//template <typename type>
+//type ZERO_IF_X(bool x, type value) {return x?0:value;}
+#define ZERO_IF_X(x, value, type) \
+	((-((type)!(x))) & (type)(value))
+
+//template <typename type>
+//type SELECT(bool x, type a, type b) {return x?a:b;}
+#define SELECT_X(x, a, b, type) \
+	(ZERO_IF_X(!x, a, type) | ZERO_IF_X(x, b, type))
+
 namespace sax {
 
 class event_queue
@@ -25,16 +35,16 @@ private:
 	{
 		enum state {INITIAL, ALLOCATED, COMMITTED, SKIPPED};
 		volatile state block_state;
-		uint32_t block_size;
+		int32_t block_size;
 	};
 
 	friend class stage;
 
 public:
-	event_queue(uint32_t cap) throw(std::bad_alloc) :
+	event_queue(int32_t cap) throw(std::bad_alloc) :
 		_buf(NULL), _lock(128), _cap(cap)
 	{
-		assert(_cap > sizeof(event_header));
+		assert(_cap > (int32_t) sizeof(event_header));
 		_buf = new char[_cap];	// just throw std::bad_alloc() if failed
 
 		_alloc_pos = 0;
@@ -54,25 +64,22 @@ public:
 	event_type* pop_event()
 	{
 		if (UNLIKELY(_free_pos == _alloc_pos)) return NULL;
-		if (UNLIKELY(_cap - _free_pos <= sizeof(event_header))) {
+		if (UNLIKELY(_cap - _free_pos <= (int32_t) sizeof(event_header))) {
 			_free_pos = 0;
 		}
 
-		do {
-			event_header::state s = ((event_header*) (_buf + _free_pos))->block_state;
+		event_header::state s = ((event_header*) (_buf + _free_pos))->block_state;
+		if (LIKELY(s == event_header::COMMITTED)) {
+			return (event_type*) (_buf + _free_pos + sizeof(event_header));
+		}
+		else if (UNLIKELY(s == event_header::SKIPPED)) {
+			_free_pos = 0;
+			s = ((event_header*) (_buf))->block_state;
 			if (LIKELY(s == event_header::COMMITTED)) {
-				return (event_type*) (_buf + _free_pos + sizeof(event_header));
+				return (event_type*) (_buf + sizeof(event_header));
 			}
-			else if (UNLIKELY(s == event_header::SKIPPED)) {
-				_free_pos = 0;
-				continue;
-			}
-			else {
-				return NULL;
-			}
-		} while(1);
+		}
 
-		// never reach
 		return NULL;
 	}
 
@@ -91,7 +98,7 @@ public:
 
 		if (UNLIKELY(ptr == NULL)) {
 			if (UNLIKELY(wait == false)) {
-				return false;
+				return NULL;
 			}
 
 			do {
@@ -106,103 +113,96 @@ public:
 	}
 
 private:
-	void* allocate(uint32_t length)
+	void* allocate(int32_t length)
 	{
 		void* ptr = NULL;
-		uint32_t new_alloc_pos(-1);
 
 		// add header size and align memory
-		uint32_t new_len = (length + sizeof(event_header) + sizeof(intptr_t) - 1) &
+		int32_t new_len = (length + sizeof(event_header) + sizeof(intptr_t) - 1) &
 				(~(sizeof(intptr_t) - 1));
 
-		if (LIKELY(_alloc_pos >= _free_pos)) {
-			/*
-			 * "_alloc_pos > _free_pos" means:
-			 *
-			 *   .......###########........
-			 *         ^           ^
-			 *    _free_pos   _alloc_pos
-			 *
-			 *   so there are two space blocks for allocation.
-			 *
-			 * or it is just an entire empty block, then "_free_pos == _alloc_pos".
-			 *
-			 * when "_free_pos == _alloc_pos", _alloc_pos may point to any position of the buffer.
-			 */
+		int32_t new_alloc_pos = _alloc_pos;
+		int32_t local_free_pos = _free_pos;	// _free_pos may be modified by other thread
 
-			// try to allocate from the rear space block
-			if (LIKELY(_cap - _alloc_pos >= new_len)) {
-				ptr = _buf + _alloc_pos;
-				new_alloc_pos = _alloc_pos + new_len;
-			}
-			// try to allocate from the front space block
-			else if (LIKELY(_free_pos > new_len)) {	// can not be "_free_pos >= _new_len",
-													// _alloc_pos == _free_pos means empty, not full
+		//
+		// "_alloc_pos - _free_pos > 0" says:
+		//
+		//   .......###########........
+		//         ^           ^
+		//    _free_pos   _alloc_pos
+		//
+		//   may allocate from the rear or the front of the buffer.
+		//
+		// and then "_free_pos == _alloc_pos" means empty,
+		// _alloc_pos may point to any position of the buffer.
+		//
 
-				// set the last block as end of 'line'
-				if (_cap - _alloc_pos >= sizeof(event_header)) {
-					event_header* last_block = (event_header*) (_buf + _alloc_pos);
-					last_block->block_state = event_header::SKIPPED;
-				}
+		bool cond1 = (_alloc_pos - local_free_pos) >= 0;
+		bool cond2 = (_cap - _alloc_pos - new_len) >= 0;
 
-				ptr = _buf;
-				new_alloc_pos = new_len;
+		// there are not enough space to allocate in the rear,
+		// so roll back to the front.
+		bool skip_flag = cond1 & !cond2;
+		if (UNLIKELY(skip_flag)) new_alloc_pos = 0;
+
+		//
+		// if (cond1 & cond2) == true, then it can allocate from the rear;
+		// otherwise, it try to allocate from the front.
+		//
+		// "(_free_pos - new_alloc_pos - new_len) > 0" handles many cases:
+		//   1). if new_alloc_pos == _alloc_pos && _alloc_pos >= _free_pos,
+		//       the result of "_free_pos - new_alloc_pos - length" will be negative;
+		//   2). new_alloc_pos just rolled back to the zero position,
+		//       trying to allocate from the front;
+		//   3). if new_alloc_pos == _alloc_pos && _alloc_pos < _free_pos,
+		//       just a normal case of this algorithm.
+		//
+		// "_alloc_pos < _free_pos" means:
+		//
+		//   ###..............#########...
+		//      ^            ^         ^
+		//   _alloc_pos  _free_pos   too small to allocate
+		//
+		// so "allocated" is telling whether allocation is successful or not.
+		//
+
+		bool allocated = (cond1 & cond2) | ((local_free_pos - new_alloc_pos - new_len) > 0);
+
+		if (LIKELY(allocated)) {
+			ptr = (void*)(_buf + new_alloc_pos);
+			event_header* block = (event_header*) ptr;
+			block->block_state = event_header::ALLOCATED;
+			block->block_size = new_len;
+
+			if (UNLIKELY(skip_flag && (_cap - _alloc_pos > (int32_t) sizeof(event_header)))) {
+				block = (event_header*) (_buf + _alloc_pos);
+				block->block_state = event_header::SKIPPED;
 			}
-			else {
-				return NULL;
-			}
+
+			_alloc_pos = new_alloc_pos + new_len;
 		}
-		else {	// _alloc_pos < _free_pos
-			/*
-			 * "_alloc_pos < _free_pos" means:
-			 *
-			 *   ###..............#########...
-			 *      ^            ^         ^
-			 *   _alloc_pos  _free_pos   too small to allocate
-			 */
-
-			if (_free_pos - _alloc_pos > new_len) {	// can not be "_free_pos - _alloc_pos >= new_len"
-				ptr = _buf + _alloc_pos;
-				new_alloc_pos = _alloc_pos + new_len;
-			}
-			else {
-				return NULL;
-			}
-		}
-
-		event_header* block = (event_header*) ptr;
-		block->block_state = event_header::ALLOCATED;
-		block->block_size = new_len;
-
-		//assert(new_alloc_pos != (uint32_t) -1);
-		_alloc_pos = new_alloc_pos;
 
 		return ptr;
 	}
 
 	void free(void* ptr)
 	{
+		//assert((char*)ptr - _buf == _free_pos);
 		event_header* block = (event_header*) ptr;
-		uint32_t length = block->block_size;
-
-		if (LIKELY(_free_pos + length <= _cap)) {
-			assert((char*) ptr - _buf == _free_pos);
-			_free_pos += length;
-		}
-		else {
-			assert(ptr == _buf);
-			_free_pos = length;
-		}
+		_free_pos += block->block_size;
 	}
 
 private:
 	char* _buf;
 	spin_type _lock;
-	uint32_t _cap;
-	uint32_t _alloc_pos;
-	uint32_t _free_pos;
+	int32_t _cap;
+	int32_t _alloc_pos;
+	int32_t _free_pos;
 };
 
 } // namespace sax
+
+#undef SELECT_X
+#undef ZERO_IF_X
 
 #endif /* EVENT_QUEUE_H_ */

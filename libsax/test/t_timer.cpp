@@ -248,7 +248,7 @@ TEST(stimer, basic_test)
 		ev->delay_ms = 50;
 		ev->invoke_param = (void*)&a;
 		ev->trans_id = 1;
-		timer->commit_event(ev);
+		timer->push_event(ev);
 	}
 
 	g_thread_sleep(0.060);
@@ -260,7 +260,7 @@ TEST(stimer, basic_test)
 		ev->delay_ms = 50;
 		ev->invoke_param = (void*)&a;
 		ev->trans_id = 2;
-		timer->commit_event(ev);
+		timer->push_event(ev);
 	}
 
 	{
@@ -269,7 +269,7 @@ TEST(stimer, basic_test)
 		ev->delay_ms = 51;
 		ev->invoke_param = (void*)&a;
 		ev->trans_id = 3;
-		timer->commit_event(ev);
+		timer->push_event(ev);
 	}
 
 	{
@@ -278,7 +278,7 @@ TEST(stimer, basic_test)
 		ev->delay_ms = 150;
 		ev->invoke_param = (void*)&a;
 		ev->trans_id = 4;
-		timer->commit_event(ev);
+		timer->push_event(ev);
 	}
 
 	{
@@ -287,7 +287,7 @@ TEST(stimer, basic_test)
 		ev->delay_ms = 1500;
 		ev->invoke_param = (void*)&a;
 		ev->trans_id = 5;
-		timer->commit_event(ev);
+		timer->push_event(ev);
 	}
 
 	g_thread_sleep(0.100);

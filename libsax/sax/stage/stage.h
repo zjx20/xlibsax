@@ -141,21 +141,22 @@ public:
 	friend class stage_creator;
 
 	template <class EVENT_TYPE>
-	inline EVENT_TYPE* allocate_event(uint64_t shard_key, bool wait = true)
+	inline EVENT_TYPE* allocate_event(uint64_t shard_key = 0, bool wait = true)
 	{
 		return _queues[_dispatcher->dispatch(EVENT_TYPE::ID, shard_key)]->
 				allocate_event<EVENT_TYPE>(wait);
 	}
 
-	template <class EVENT_TYPE>
-	inline void commit_event(EVENT_TYPE* ev)
+	void push_event(event_type* ev)
 	{
-		((event_queue::event_header*)
-				(((char*) ev) - sizeof(event_queue::event_header)))
-		        ->block_state = event_queue::event_header::COMMITTED;
+		event_queue::event_header* block = (event_queue::event_header*)
+				(((char*) ev) - sizeof(event_queue::event_header));
+		// gcc 4.6.3 generate bad code when compile with -O3
+		MEMORY_BARRIER(&block);
+		block->block_state = event_queue::event_header::COMMITTED;
 	}
 
-	inline stage() : 
+	stage() :
 		_handlers(NULL), _threads(NULL), _queues(NULL), _dispatcher(NULL),
 		_thread_num(0), _stopped(true), _next(NULL), _prev(NULL) {}
 	

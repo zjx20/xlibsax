@@ -5,7 +5,7 @@
 volatile size_t sink_counter = 0;
 volatile size_t source_counter = 0;
 
-const size_t stop_counter = 10000000ull;
+const size_t stop_counter = 100000000ull;
 
 struct test_event : public sax::user_event_base</*sax::event_type::USER_TYPE_START+*/1, test_event>
 {
@@ -37,7 +37,7 @@ class source : public sax::handler_base
 //			test_event ev;
 //			_dest->push_event(&ev);
 			test_event* ev = _dest->allocate_event<test_event>(0);
-			_dest->commit_event(ev);
+			_dest->push_event(ev);
 			source_counter++;
 //			if (source_counter % 100000 == 0) {
 //				g_thread_sleep(0.01);
@@ -78,7 +78,7 @@ public:
 //		test_event1 ev1;
 //		_dest->push_event(&ev1);
 		test_event1* ev1 = _dest->allocate_event<test_event1>(0);
-		_dest->commit_event(ev1);
+		_dest->push_event(ev1);
 	}
 	virtual void on_finish(int thread_id) {printf("midware finish: %d\n", thread_id);}
 	virtual ~midware() {}
@@ -89,13 +89,13 @@ private:
 int main( int argc, char *argv[] )
 {
 	sax::stage* ssink = sax::stage_creator<sink>::create_stage(
-			"sink", 1, NULL, 10*1024*1024, new sax::single_dispatcher());
+			"sink", 1, NULL, 2*1024*1024, new sax::single_dispatcher());
 
 	sax::stage* smid = sax::stage_creator<midware>::create_stage(
-			"midware", 2, ssink, 10*1024*1024, new sax::default_dispatcher());
+			"midware", 2, ssink, 1*1024*1024, new sax::default_dispatcher());
 
 	sax::stage* ssource = sax::stage_creator<source>::create_stage(
-			"source", 1, smid, 10*1024*1024, new sax::single_dispatcher());
+			"source", 1, smid, 512*1024, new sax::single_dispatcher());
 	
 	size_t last_sink_counter = sink_counter;
 	size_t last_source_counter = source_counter;

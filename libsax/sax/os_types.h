@@ -77,7 +77,7 @@ char (&ArraySizeHelper(const T (&array)[N]))[N];	// declaring a function that re
 
 #else
 
-#warning "ARRAY_SIZE() is unsafe in c, use it on your own risk."
+//#warning "ARRAY_SIZE() is unsafe in c, use it on your own risk."
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 #endif//ARRAY_SIZE
