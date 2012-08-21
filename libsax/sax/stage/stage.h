@@ -149,11 +149,7 @@ public:
 
 	void push_event(event_type* ev)
 	{
-		event_queue::event_header* block = (event_queue::event_header*)
-				(((char*) ev) - sizeof(event_queue::event_header));
-		// gcc 4.6.3 generate bad code when compile with -O3
-		MEMORY_BARRIER(&block);
-		block->block_state = event_queue::event_header::COMMITTED;
+		event_queue::commit_event(ev);
 	}
 
 	stage() :

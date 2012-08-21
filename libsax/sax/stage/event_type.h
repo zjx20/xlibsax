@@ -28,8 +28,6 @@ protected:
 	int32_t type_id;
 };
 
-// TODO: add static assert for user_event_base::ID, must be smaller than event_type::USER_TYPE_START
-
 template <int32_t TID, typename REAL_TYPE>
 class sax_event_base : public event_type
 {
@@ -50,7 +48,7 @@ template <int32_t TID, typename REAL_TYPE>
 class user_event_base : public event_type
 {
 public:
-	enum {ID = TID};
+	enum {ID = TID + event_type::USER_TYPE_START};
 	virtual ~user_event_base() {}
 
 	void destroy()

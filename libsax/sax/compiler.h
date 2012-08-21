@@ -31,6 +31,7 @@ void __sax_memory_barrier(int, ...);
 #define UNUSED_PARAMETER(x) (void)(x)
 #endif//UNUSED_PARAMETER
 
+
 //STATIC_ASSERT
 #if SUPPORT_STATIC_ASSERT
 #define STATIC_ASSERT(expr, msg) static_assert(expr, #msg)
@@ -50,6 +51,11 @@ class __static_assert_helper<true> {};
 #else
 #define STATIC_ASSERT(expr, msg) typedef struct {char _static_assert_error__##msg[(expr)?1:-1];} compile_error##__LINE__##msg;
 #endif//STATIC_ASSERT
+
+
+#if defined(__GNUC__)
+#define NOINLINE __attribute__((noinline))
+#endif
 
 
 #endif /* COMPILER_H_ */

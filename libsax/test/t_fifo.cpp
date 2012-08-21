@@ -1,5 +1,5 @@
 /*
- * t_slab.cpp
+ * t_fifo.cpp
  *
  *  Created on: 2012-7-13
  *      Author: x

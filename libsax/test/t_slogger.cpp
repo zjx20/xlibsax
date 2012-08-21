@@ -140,6 +140,140 @@ TEST(log_size_traits, combine)
 			"a = " << std::string("std::string") << 'a' << 123 << 23234.3242354 << log_size_traits()));
 }
 
+size_t get_file_size(const std::string& file)
+{
+	FILE* f = fopen(file.c_str(), "r");
+	if (f == NULL) return (size_t) -1;
+	fseek(f, 0, SEEK_END);
+	size_t res = ftell(f);
+	fclose(f);
+	return res;
+}
+
+#define LOG_S(log, msg) log.log(msg, strlen(msg))
+
+TEST(log_file_writer, max_size_limit)
+{
+	std::string logfile_name = "log_test1.txt";
+	std::string clean_cmd = (std::string("rm -rf ") + logfile_name + "*").c_str();
+
+	system(clean_cmd.c_str());
+
+	char s[] = "01234567891";	// 11 chars
+
+	{
+		sax::slogger::log_file_writer<sax::dummy_lock> log(
+				logfile_name, 100, 50, sax::slogger::SAX_TRACE);
+		for (int i=0; i<6; i++) {
+			LOG_S(log, s);
+		}
+	}
+
+	ASSERT_EQ(strlen(s), get_file_size(logfile_name));
+
+	system(clean_cmd.c_str());
+}
+
+TEST(log_file_writer, max_logfiles)
+{
+	std::string logfile_name = "log_test2.txt";
+	std::string clean_cmd = (std::string("rm -rf ") + logfile_name + "*").c_str();
+
+	system(clean_cmd.c_str());
+
+	char s[] = "01234567891";	// 11 chars
+
+	{
+		sax::slogger::log_file_writer<sax::spin_type> log(
+				logfile_name, 5, 10, sax::slogger::SAX_TRACE);
+		for (int i=0; i<10; i++) {
+			LOG_S(log, s);
+		}
+	}
+
+	ASSERT_EQ(0, get_file_size(logfile_name));
+	ASSERT_EQ(1, g_exists_file(logfile_name.c_str()));
+	ASSERT_EQ(1, g_exists_file((logfile_name + ".1").c_str()));
+	ASSERT_EQ(1, g_exists_file((logfile_name + ".2").c_str()));
+	ASSERT_EQ(1, g_exists_file((logfile_name + ".3").c_str()));
+	ASSERT_EQ(1, g_exists_file((logfile_name + ".4").c_str()));
+	ASSERT_EQ(1, g_exists_file((logfile_name + ".5").c_str()));
+	ASSERT_EQ(0, g_exists_file((logfile_name + ".6").c_str()));
+
+	system(clean_cmd.c_str());
+}
+
+TEST(log_file_writer, append_file)
+{
+	std::string logfile_name = "log_test3.txt";
+	std::string clean_cmd = (std::string("rm -rf ") + logfile_name + "*").c_str();
+
+	system(clean_cmd.c_str());
+
+	FILE* f = fopen(logfile_name.c_str(), "w");
+	fputs("hello", f);
+	fclose(f);
+
+	{
+		sax::slogger::log_file_writer<sax::spin_type> log(
+				logfile_name, 100, 100, sax::slogger::SAX_TRACE);
+		LOG_S(log, " world");
+	}
+
+	ASSERT_EQ(11, get_file_size(logfile_name));
+
+	system(clean_cmd.c_str());
+}
+
+TEST(log_file_writer, curr_logfiles)
+{
+	std::string logfile_name = "log_test4.txt";
+	std::string clean_cmd = (std::string("rm -rf ") + logfile_name + "*").c_str();
+
+	system(clean_cmd.c_str());
+
+	fclose(fopen((logfile_name + ".1").c_str(), "w"));
+	fclose(fopen((logfile_name + ".2").c_str(), "w"));
+	fclose(fopen((logfile_name + ".3").c_str(), "w"));
+	FILE* f = fopen((logfile_name + ".4").c_str(), "w");
+	fputs("hello world", f);
+	fclose(f);
+
+	{
+		sax::slogger::log_file_writer<sax::spin_type> log(
+				logfile_name, 100, 10, sax::slogger::SAX_TRACE);
+		LOG_S(log, "01234567890");	// 11 chars
+	}
+
+	ASSERT_EQ(11, get_file_size(logfile_name + ".5"));
+
+	system(clean_cmd.c_str());
+}
+
+TEST(log_file_writer, stderr)
+{
+	{
+		sax::slogger::log_file_writer<sax::spin_type> log(
+				"stderr", 10, 10, sax::slogger::SAX_TRACE);
+		LOG_S(log, "log to stderr.\n");
+		for (int i=0; i<10; i++) {
+			LOG_S(log, "0123456789 abcdefghijklmnopqrstuvwxyz\n");
+		}
+	}
+}
+
+TEST(log_file_writer, stdout)
+{
+	{
+		sax::slogger::log_file_writer<sax::spin_type> log(
+				"stdout", 10, 10, sax::slogger::SAX_TRACE);
+		LOG_S(log, "log to stdout.\n");
+		for (int i=0; i<10; i++) {
+			LOG_S(log, "0123456789 abcdefghijklmnopqrstuvwxyz\n");
+		}
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	testing::InitGoogleTest(&argc, argv);

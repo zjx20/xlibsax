@@ -12,19 +12,10 @@
 #include <cassert>
 #include <new>
 
+#include "event_type.h"
 #include "sax/compiler.h"
 #include "sax/os_types.h"
 #include "sax/sysutil.h"
-
-//template <typename type>
-//type ZERO_IF_X(bool x, type value) {return x?0:value;}
-#define ZERO_IF_X(x, value, type) \
-	((-((type)!(x))) & (type)(value))
-
-//template <typename type>
-//type SELECT(bool x, type a, type b) {return x?a:b;}
-#define SELECT_X(x, a, b, type) \
-	(ZERO_IF_X(!x, a, type) | ZERO_IF_X(x, b, type))
 
 namespace sax {
 
@@ -33,12 +24,10 @@ class event_queue
 private:
 	struct event_header
 	{
-		enum state {INITIAL, ALLOCATED, COMMITTED, SKIPPED};
+		enum state {ALLOCATED, COMMITTED, SKIPPED};
 		volatile state block_state;
 		int32_t block_size;
 	};
-
-	friend class stage;
 
 public:
 	event_queue(int32_t cap) throw(std::bad_alloc) :
@@ -49,10 +38,6 @@ public:
 
 		_alloc_pos = 0;
 		_free_pos = 0;
-
-		// set a initial state to first block to prevent bad thing
-		// when calling pop_event() at first
-		((event_header*) _buf)->block_state = event_header::INITIAL;
 	}
 
 	~event_queue()
@@ -86,7 +71,7 @@ public:
 	void destroy_event(event_type* ev)
 	{
 		ev->destroy();
-		this->free(((char*) ev) - sizeof(event_header));
+		this->free(ev);
 	}
 
 	template <class EVENT_TYPE>
@@ -109,7 +94,30 @@ public:
 			} while(ptr == NULL);
 		}
 
-		return new (((char*) ptr) + sizeof(event_header)) EVENT_TYPE();
+		return new (ptr) EVENT_TYPE();
+	}
+
+	// the following code will be broken when using gcc 4.6.3 and compiling with -O3
+	// <code>
+	//   event* ev = queue->allocate_event<event>();
+	//   ...
+	//   queue->commit_event(ev);
+	// </code>
+	//
+	// all functions are inlined, and then the compiler rearrange the code.
+	// for the compiler, the pointer "ev" and the pointer "ev - sizeof(event_header)"
+	// is not depend on each other. it is completely legal but evil.
+	// so it may set COMMITTED to event_header before the new operator,
+	// in the meanwhile other threads would pop a uninitialized event.
+	//
+	// force no-inline or add a memory barrier could solve it.
+	NOINLINE
+	static void commit_event(event_type* ev)
+	{
+		event_queue::event_header* block = (event_queue::event_header*)
+				(((char*) ev) - sizeof(event_queue::event_header));
+		//MEMORY_BARRIER(&block);
+		block->block_state = event_queue::event_header::COMMITTED;
 	}
 
 private:
@@ -180,6 +188,8 @@ private:
 			}
 
 			_alloc_pos = new_alloc_pos + new_len;
+
+			return (char*) ptr + sizeof(event_header);
 		}
 
 		return ptr;
@@ -187,8 +197,8 @@ private:
 
 	void free(void* ptr)
 	{
-		//assert((char*)ptr - _buf == _free_pos);
-		event_header* block = (event_header*) ptr;
+		//assert(((char*) ptr - sizeof(event_header)) - _buf == _free_pos);
+		event_header* block = (event_header*) ((char*) ptr - sizeof(event_header));
 		_free_pos += block->block_size;
 	}
 
@@ -201,8 +211,5 @@ private:
 };
 
 } // namespace sax
-
-#undef SELECT_X
-#undef ZERO_IF_X
 
 #endif /* EVENT_QUEUE_H_ */
