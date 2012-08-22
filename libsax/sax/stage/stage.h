@@ -225,14 +225,14 @@ private:
 	stage* _prev;
 };
 
-template <class HANDLER, class THREADOBJ = thread_obj>
+template <class HANDLER, class THREADOBJ = thread_obj, class STAGE = stage>
 class stage_creator
 {
 public:
 	static stage* create_stage(const char* name, uint32_t threads, void* handler_param,
 			uint32_t queue_bytes, dispatcher_base* dispatcher) throw(std::bad_alloc)
 	{
-		stage *st = new stage();
+		stage *st = new STAGE();
 
 		uint32_t i, n = threads;
 

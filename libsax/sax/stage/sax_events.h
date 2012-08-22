@@ -48,18 +48,14 @@ struct timer_timeout_event : public sax_event_base<__LINE__, timer_timeout_event
 	void*		invoke_param;
 };
 
-namespace slogger {
 template <size_t BODY_SIZE>
-struct log_event
-{
-	char body[BODY_SIZE];
-};
+struct log_event;
 
 #define DECL_LOG_EVENT(size)	\
-	template <>	struct log_event<size> : public sax_event_base<__LINE__, log_event<size> > {}; \
+	template <>	struct log_event<size> : public sax_event_base<__LINE__, log_event<size> > \
+	{ char body[size]; }; \
 	typedef log_event<size> log_event##size
 
-DECL_LOG_EVENT(64);			// sax::log_event64
 DECL_LOG_EVENT(128);		// sax::log_event128
 DECL_LOG_EVENT(256);		// sax::log_event256
 DECL_LOG_EVENT(512);		// sax::log_event512
@@ -69,8 +65,6 @@ DECL_LOG_EVENT(4096);		// sax::log_event4096
 DECL_LOG_EVENT(8192);		// sax::log_event8192
 
 #undef DECL_LOG_EVENT
-
-} // namespace slogger
 
 STATIC_ASSERT(__LINE__ < event_type::USER_TYPE_START,
 		sax_event_type_id_must_smaller_than__event_type__USER_TYPE_START);

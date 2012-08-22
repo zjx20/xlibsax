@@ -55,6 +55,10 @@ class __static_assert_helper<true> {};
 
 #if defined(__GNUC__)
 #define NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define NOINLINE __declspec(noinline)
+#else
+#warning "NOINLINE is unavailable."
 #endif
 
 

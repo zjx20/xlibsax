@@ -3,6 +3,7 @@ TARGET = libsax.a
 OBJS = $(patsubst %.c,%.o,$(wildcard sax/*.c))
 OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/*.cpp))
 OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/stage/*.cpp))
+OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/logger/*.cpp))
 OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/xml/*.cpp))
 
 HDRS = $(wildcard stx/*.h)
@@ -10,6 +11,7 @@ HDRS+= $(wildcard sax/*.h)
 HDRS+= $(wildcard sax/win32/*.h)
 HDRS+= $(wildcard sax/c++/*.h)
 HDRS+= $(wildcard sax/stage/*.h)
+HDRS+= $(wildcard sax/logger/*.h)
 HDRS+= $(wildcard sax/xml/*.h)
 
 INC = -I. 
