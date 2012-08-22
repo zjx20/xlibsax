@@ -20,7 +20,7 @@ struct handler_base {
 	virtual ~handler_base() {}
 };
 
-template <class HANDLER, class THREADOBJ>
+template <class HANDLER, class THREADOBJ, class STAGE>
 class stage_creator;
 
 class thread_obj
@@ -118,7 +118,7 @@ protected:
 	volatile bool _stop;
 
 private:
-	template <class HANDLER, class THREADOBJ>
+	template <class HANDLER, class THREADOBJ, class STAGE>
 	friend class stage_creator;
 
 	bool wait_for_stage_creator()
@@ -137,7 +137,7 @@ private:
 class stage
 {
 public:
-	template <class HANDLER, class THREADOBJ>
+	template <class HANDLER, class THREADOBJ, class STAGE>
 	friend class stage_creator;
 
 	template <class EVENT_TYPE>
