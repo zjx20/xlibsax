@@ -3057,7 +3057,7 @@ uint64_t g_now_uid()
 #define DIV(a, b) ((a) / (b) - ((a) % (b) < 0))
 #define LEAPS_THRU_END_OF(y) (DIV(y, 4) - DIV(y, 100) + DIV(y, 400))
 
-void g_localtime(const void *_sec, void *_tp, long offset)
+struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset)
 {
 	/* How many days come before each month (0-12). */
 	static const short __mon_yday[2][13] =
@@ -3069,14 +3069,14 @@ void g_localtime(const void *_sec, void *_tp, long offset)
 	};
 
 	long days, rem, y;
-	const time_t *sec;
+	time_t sec;
 	const short *ip;
 	struct tm *tp;
 
 	tp = (struct tm *) _tp;
-	sec = (const time_t *) _sec;
-	days = *sec / SECS_PER_DAY;
-	rem  = *sec % SECS_PER_DAY;
+	sec = _sec;
+	days = sec / SECS_PER_DAY;
+	rem  = sec % SECS_PER_DAY;
 	rem += offset;
 	
 	while (rem < 0) { rem += SECS_PER_DAY; --days;}
@@ -3114,6 +3114,8 @@ void g_localtime(const void *_sec, void *_tp, long offset)
 	tp->tm_mon = y;
 	tp->tm_mday = days + 1;
 	tp->tm_isdst = 0;
+
+	return tp;
 }
 
 //-------------------------------------------------------------------------

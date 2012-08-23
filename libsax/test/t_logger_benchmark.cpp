@@ -26,27 +26,27 @@ void* log(void* param)
 		{
 		case 0:
 		{
-			LOG_TRACE(logger, "fasdfjkawue" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_TRACE(logger, "fasdfjkawue" << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 1:
 		{
-			LOG_DEBUG(logger, "fasdfjkawuesdfadfjakl;" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_DEBUG(logger, "fasdfjkawuesdfadfjakl;" << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 2:
 		{
-			LOG_INFO(logger, "fasdfjkawuevxcvmzkljkl;ujdl;ajjkl;sfj;" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_INFO(logger, "fasdfjkawuevxcvmzkljkl;ujdl;ajjkl;sfj;" << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 3:
 		{
-			LOG_WARN(logger, "fasdfjkawueqw3rjklj;klsdvjkls;vuinmefklasdfjakl;fjakl;jdfakl;sjdf;" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_WARN(logger, "fasdfjkawueqw3rjklj;klsdvjkls;vuinmefklasdfjakl;fjakl;jdfakl;sjdf;" << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 4:
 		{
-			LOG_ERROR(logger, "fasdfjkawue123456v415aw34f56a1f3a41331f3as57e8f6d1534f56asd4fas2d3f13asd4fsdfasdfasdf" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_ERROR(logger, "fasdfjkawue123456v415aw34f56a1f3a41331f3as57e8f6d1534f56asd4fas2d3f13asd4fsdfasdfasdf" << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		}
@@ -71,10 +71,31 @@ int main()
 		for (int i=0; i<threads; i++) {
 			sum += counter[i];
 		}
-		printf("%lu\n", sum - last_sum);
+		printf("%lu %lu\n", sum, sum - last_sum);
 		last_sum = sum;
 		g_thread_sleep(1.0);
+		if (sum > 1000000) break;
 	}
+
+//	tm t;
+//
+//	clock_t start = clock();
+//	int64_t now = g_now_us() / 1000000;
+//	for (int i=0;i<10000000;i++) {
+//		g_localtime(now, &t, 8 * 3600);
+//	}
+//	clock_t end = clock();
+//
+//	printf("g_localtime: %lu clocks\n", end - start);
+//
+//	start = clock();
+//	now = g_now_us() / 1000000;
+//	for (int i=0;i<10000000;i++) {
+//		sax::logger::fast_localtime(now, &t);
+//	}
+//	end = clock();
+//
+//	printf("fast_localtime: %lu clocks\n", end - start);
 
 	return 0;
 }

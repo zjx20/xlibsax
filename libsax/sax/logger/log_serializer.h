@@ -34,6 +34,7 @@ private:
 	size_t _curr_pos;
 };
 
+inline
 log_serializer& operator << (log_serializer& serializer, const char& c)
 {
 	*serializer.current() = c;
@@ -41,66 +42,77 @@ log_serializer& operator << (log_serializer& serializer, const char& c)
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const uint8_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRIu8, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const int16_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRId16, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const uint16_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRIu16, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const int32_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRId32, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const uint32_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRIu32, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const int64_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRId64, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const uint64_t& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%"PRIu64, i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const float& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%g", i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const double& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%g", i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const long double& i)
 {
 	serializer.advance(sprintf(serializer.current(), "%Lg", i));
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const char* s)
 {
 	size_t len = strlen(s);
@@ -109,6 +121,7 @@ log_serializer& operator << (log_serializer& serializer, const char* s)
 	return serializer;
 }
 
+inline
 log_serializer& operator << (log_serializer& serializer, const std::string& s)
 {
 	memcpy(serializer.current(), s.c_str(), s.length());
@@ -118,6 +131,7 @@ log_serializer& operator << (log_serializer& serializer, const std::string& s)
 
 class log_serializer_eol {};
 
+inline
 log_serializer& operator << (log_serializer& serializer, const log_serializer_eol& s)
 {
 	assert(serializer.length() > 0);

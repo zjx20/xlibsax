@@ -316,7 +316,7 @@ int g_timezone();
 uint64_t g_now_uid(); // unique tick as ID
 
 /// @brief convert time_t to struct tm
-void g_localtime(const void *_sec, void *_tp, long offset);
+struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset);
 
 //-------------------------------------------------------------------------
 typedef struct g_share_t g_share_t;

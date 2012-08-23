@@ -16,10 +16,11 @@
 
 namespace sax {
 namespace logger {
-// cached timezone offset for g_localtime()
-extern int timezone_offset;
+// only convert unix timestamp to date and time (the first 6 fields in struct tm)
+void fast_localtime(int64_t unix_sec, struct tm* st);
 }
 }
+
 
 #undef __LOGGING_SYNC
 #if defined(LOGGING_SYNC)
@@ -118,10 +119,9 @@ extern int timezone_offset;
 		                (2+sizeof(#level)-4-1) /*log level, minus "SAX_"*/ + \
 						(3+sizeof(file)-1+sizeof(#line_num)-1) /*source*/ + \
 						1 /*space*/ + 1 /*'\0'*/]; \
-		uint64_t now_us = g_now_us(); \
-		time_t now_sec = (time_t) (now_us / 1000000); \
+		int64_t now_us = g_now_us(); \
 		struct tm st; \
-		g_localtime(&now_sec, &st, timezone_offset); \
+		fast_localtime(now_us / 1000000, &st); \
 		sprintf(log_header, "[%04d%02d%02d %02d:%02d:%02d.%06d][%s][%s:%d] ", \
 				st.tm_year + 1900, st.tm_mon + 1, st.tm_mday, \
 				st.tm_hour, st.tm_min, st.tm_sec, (int) (now_us % 1000000), \
@@ -129,11 +129,35 @@ extern int timezone_offset;
 		__LOGGING_LOG(logger, log_header << x); \
 	}
 
-#define LOG_TRACE(logger, x) __LOG_BASE(logger, x, SAX_TRACE, __FILE__, __LINE__)
-#define LOG_DEBUG(logger, x) __LOG_BASE(logger, x, SAX_DEBUG, __FILE__, __LINE__)
-#define LOG_INFO(logger, x)  __LOG_BASE(logger, x, SAX_INFO,  __FILE__, __LINE__)
-#define LOG_WARN(logger, x)  __LOG_BASE(logger, x, SAX_WARN,  __FILE__, __LINE__)
-#define LOG_ERROR(logger, x) __LOG_BASE(logger, x, SAX_ERROR, __FILE__, __LINE__)
+#define LOGP_TRACE(logger, x) __LOG_BASE(logger, x, SAX_TRACE, __FILE__, __LINE__)
+#define LOGP_DEBUG(logger, x) __LOG_BASE(logger, x, SAX_DEBUG, __FILE__, __LINE__)
+#define LOGP_INFO(logger, x)  __LOG_BASE(logger, x, SAX_INFO,  __FILE__, __LINE__)
+#define LOGP_WARN(logger, x)  __LOG_BASE(logger, x, SAX_WARN,  __FILE__, __LINE__)
+#define LOGP_ERROR(logger, x) __LOG_BASE(logger, x, SAX_ERROR, __FILE__, __LINE__)
+
+
+namespace sax {
+namespace logger {
+#if __LOGGING_SYNC
+extern log_file_writer<mutex_type>* __global_sync_logger;
+#define __GLOBAL_LOGGER sax::logger::__global_sync_logger
+
+bool init_global_sync_logger(const std::string& logfile_name,
+		int32_t max_logfiles, size_t size_per_logfile, log_level level);
+
+#define INIT_GLOBAL_LOGGER(...) init_global_sync_logger(__VA_ARGS__)
+
+#else
+#endif
+}
+}
+
+
+#define LOG_TRACE(x) LOGP_TRACE(__GLOBAL_LOGGER, x)
+#define LOG_DEBUG(x) LOGP_DEBUG(__GLOBAL_LOGGER, x)
+#define LOG_INFO(x)  LOGP_INFO( __GLOBAL_LOGGER, x)
+#define LOG_WARN(x)  LOGP_WARN( __GLOBAL_LOGGER, x)
+#define LOG_ERROR(x) LOGP_ERROR(__GLOBAL_LOGGER, x)
 
 
 #endif /* _SAX_LOGGER_H_ */
