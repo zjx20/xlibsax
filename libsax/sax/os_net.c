@@ -154,7 +154,45 @@ int g_non_block_delayed(int got)
 #endif
 
 //-------------------------------------------------------------------------
-int g_tcp_listen(const char *addr, int port, int backlog/* = 511*/)
+
+int g_inet_aton(const char* addr, uint32_t* ip)
+{
+	if (inet_aton(addr, (struct in_addr*) ip) == 0)
+	{
+		struct hostent *he = gethostbyname(addr);
+		if (!he) return -1;
+		memcpy(ip, he->h_addr, sizeof(struct in_addr));
+	}
+	return 0;
+}
+
+int g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len)
+{
+	inet_ntop(AF_INET, &ip, ip_s, len);
+	return 0;
+}
+
+uint32_t g_htonl(uint32_t hostlong)
+{
+	return htonl(hostlong);
+}
+
+uint16_t g_htons(uint16_t hostshort)
+{
+	return htons(hostshort);
+}
+
+uint32_t g_ntohl(uint32_t netlong)
+{
+	return ntohl(netlong);
+}
+
+uint16_t g_ntohs(uint16_t netshort)
+{
+	return ntohs(netshort);
+}
+
+int g_tcp_listen(const char *addr, int port, int backlog)
 {
 	int ts, on = 1;
  	struct sockaddr_in sa;
@@ -170,7 +208,7 @@ int g_tcp_listen(const char *addr, int port, int backlog/* = 511*/)
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	if (addr) {
-		if (inet_aton(addr, &sa.sin_addr) == 0) goto quit;
+		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
 	
 	if (bind(ts, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
@@ -181,9 +219,9 @@ quit:
 	CLOSE_SOCKET(ts); return -1;
 }
 
-int g_tcp_accept(int ts, char *ip, int *port)
+int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h)
 {
-	for (;;) {
+	do {
 		struct sockaddr_in sa;
 		struct linger lin={0};
 		socklen_t saLen = sizeof(sa);
@@ -204,10 +242,12 @@ int g_tcp_accept(int ts, char *ip, int *port)
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, 
 			(const char *) &on, sizeof(on));
 		
-		if (ip) strcpy(ip, inet_ntoa(sa.sin_addr));
-		if (port) *port = ntohs(sa.sin_port);
+		if (ip_n) *ip_n = sa.sin_addr.s_addr;
+		if (port_h) *port_h = ntohs(sa.sin_port);
 		return fd;
-	}
+	} while(1);
+
+	return -1;	// never reach
 }
 
 int g_tcp_connect(const char *addr, int port, int non_block)
@@ -236,13 +276,8 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 	
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short)port);
-	
-	if (inet_aton(addr, &sa.sin_addr) == 0)
-	{
-		struct hostent *he = gethostbyname(addr);
-		if (!he) goto quit;
-		memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
-	}
+
+	if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	
 	if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) return fd;
 
@@ -252,11 +287,6 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 
 quit:
 	CLOSE_SOCKET(fd); return -1;
-}
-
-void g_tcp_close(int fd)
-{
-	CLOSE_SOCKET(fd);
 }
 
 int g_tcp_write(int fd, const void *buf, size_t count)
@@ -280,7 +310,7 @@ int g_udp_open(const char *addr, int port)
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	if (addr) {
-		if (inet_aton(addr, &sa.sin_addr) == 0) goto quit;
+		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
 	
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
@@ -290,34 +320,42 @@ quit:
 	CLOSE_SOCKET(fd); return -1;
 }
 
-void g_udp_close(int fd)
-{
-	CLOSE_SOCKET(fd);
-}
-
-int g_udp_read(int fd, void *buf, size_t count, char *ip, int *port)
+int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h)
 {
 	struct sockaddr_in sa;
 	socklen_t len = 0;
 	int got = recvfrom(fd, (char *) buf,
 		count, 0, (struct sockaddr *)&sa, &len);
 	if (got > 0) {
-		if (ip) strcpy(ip, inet_ntoa(sa.sin_addr));
-		if (port) *port = ntohs(sa.sin_port);
+		if (ip_n) *ip_n = sa.sin_addr.s_addr;
+		if (port_h) *port_h = ntohs(sa.sin_port);
 	}
 	return got;
 }
 
 int g_udp_write(int fd, const void *buf, int n, const char *ip, int port)
 {
+	int closefd = 0;
+	int ret = 0;
 	struct sockaddr_in sa;
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short) port);
-	if (inet_aton(ip, &sa.sin_addr) == 0) return -1;
-	return sendto(fd, (const char *) buf,
-		n, 0, (struct sockaddr *)&sa, sizeof(sa));
+	if (g_inet_aton(ip, &sa.sin_addr.s_addr) != 0) return -1;
+	if (fd < 0) {
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd == -1) return -1;
+		closefd = 1;
+	}
+	ret = sendto(fd, (const char *) buf,
+			n, 0, (struct sockaddr *)&sa, sizeof(sa));
+	if (closefd) CLOSE_SOCKET(fd);
+	return ret;
 }
 
+void g_close_socket(int fd)
+{
+	CLOSE_SOCKET(fd);
+}
 
 //-------------------------------------------------------------------------
 
@@ -331,20 +369,14 @@ typedef struct epoll_event epoll_event;
 
 #define MAX_EPOLL_EVENT 1024
 
-typedef struct eda_item {
-	g_eda_func* proc;
-	void* user_data;
-	int mask;
-} eda_item;
-
 struct g_eda_t {
-	epoll_event		events[MAX_EPOLL_EVENT];	/* epoll_event array for polling */
-	eda_item*		items;		/* context for FDs */
-	int				epfd;		/* fd of epoll */
-	int 			maxfds;		/* the max amount of FDs can polling at the same time */
+	epoll_event events[MAX_EPOLL_EVENT];
+	int         epfd;
+	g_eda_func* proc;
+	void*       user_data;
 };
 
-g_eda_t* g_eda_open(int maxfds)
+g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
 {
 	assert(maxfds > 0);
 
@@ -358,14 +390,8 @@ g_eda_t* g_eda_open(int maxfds)
 		return NULL;
 	}
 
-	h->maxfds = maxfds;
-	h->items = malloc(sizeof(eda_item) * maxfds);
-	if (!(h->items)) {
-		close(h->epfd);
-		free(h);
-		return NULL;
-	}
-	memset(h->items, 0, sizeof(eda_item) * maxfds);
+	h->proc = proc;
+	h->user_data = user_data;
 
 	return h;
 }
@@ -375,25 +401,16 @@ void g_eda_close(g_eda_t* mgr)
 	assert(mgr);
 
 	close(mgr->epfd);
-	free(mgr->items);
 	free(mgr);
 }
 
-int g_eda_add(g_eda_t* mgr, int fd, int mask,
-	g_eda_func* proc, void* user_data)
+int g_eda_add(g_eda_t* mgr, int fd, int mask)
 {
-	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask != EDA_NONE )) return -1;
-
-	eda_item* item = mgr->items + fd;
-	item->proc = proc;
-	item->user_data = user_data;
-	item->mask = mask;
-
 	epoll_event ee;
 	ee.events = 0;
 	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
-	ee.data.ptr = mgr->items + fd;
+	ee.data.fd = fd;
 
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee) == 0 )) return 0;
 	perror("in g_eda_add() calling epoll_ctl()");
@@ -402,47 +419,20 @@ int g_eda_add(g_eda_t* mgr, int fd, int mask,
 
 int g_eda_del(g_eda_t* mgr, int fd)
 {
-	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask == EDA_NONE )) return -1;
-	mgr->items[fd].mask = EDA_NONE;
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL) == 0 )) return 0;
 	perror("in g_eda_del() calling epoll_ctl()");
 	return -1;
 }
 
-static void eda_mod_event(g_eda_t* mgr, int fd, int mask)
+void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 {
 	epoll_event ee;
 	ee.events = 0;
 	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
-	ee.data.ptr = mgr->items + fd;
-	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) {
-		mgr->items[fd].mask = mask;
-	}
-	else {
-		perror("in eda_mod_event() calling epoll_ctl()");
-	}
-}
-
-void g_eda_sub(g_eda_t* mgr, int fd, int mask)
-{
-	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask == EDA_NONE )) return;
-
-	int old_mask = mgr->items[fd].mask;
-	int new_mask = ((old_mask & (~mask)) & EDA_ALL_MASK);
-	if (LIKELY( new_mask != old_mask )) {
-		eda_mod_event(mgr, fd, new_mask);
-	}
-}
-
-void g_eda_set(g_eda_t* mgr, int fd, int mask)
-{
-	if (UNLIKELY( fd >= mgr->maxfds || mgr->items[fd].mask == EDA_NONE )) return;
-
-	int new_mask = mask & EDA_ALL_MASK;
-	if (LIKELY( mgr->items[fd].mask != new_mask )) {
-		eda_mod_event(mgr, fd, new_mask);
-	}
+	ee.data.fd = fd;
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) return;
+	perror("in g_eda_mod() calling epoll_ctl()");
 }
 
 int g_eda_poll(g_eda_t* mgr, int msec)
@@ -451,17 +441,15 @@ int g_eda_poll(g_eda_t* mgr, int msec)
 	epoll_event* ee_ptr = mgr->events;
 	int i;
 	for (i = 0; i < nfds; i++, ee_ptr++) {
-		eda_item* item = (eda_item*)ee_ptr->data.ptr;
-		int fd = item - mgr->items;
+		int fd = ee_ptr->data.fd;
 		int mask = 0;
 		mask |= (ee_ptr->events & EPOLLIN) ? EDA_READ : 0;
 		mask |= (ee_ptr->events & EPOLLOUT) ? EDA_WRITE : 0;
-		mask &= item->mask;
 
-		// add EDA_ERROR automatic
+		// add EDA_ERROR automatically
 		mask |= (ee_ptr->events & (EPOLLHUP | EPOLLERR)) ? EDA_ERROR : 0;
 
-		item->proc(mgr, fd, item->user_data, mask);
+		mgr->proc(mgr, fd, mgr->user_data, mask);
 	}
 
 	return nfds;
