@@ -33,6 +33,7 @@
 #define SWAP_BYTE(a, p1, p2) a[p1] ^= a[p2]; a[p2] ^= a[p1]; a[p1] ^= a[p2]
 
 namespace sax {
+namespace newnew {
 
 
 template <typename T>
@@ -603,6 +604,15 @@ public:
 			_buf_list.push_back(node);
 			_capacity += _block_size;
 			_usable += _block_size;
+
+//			// _current.block == NULL in the initial state of buffer
+//			if (UNLIKELY(_current.block == NULL)) {
+//				assert(_current.position == 0);
+//				_current = pos(_buf_list.get_head(), _buf_list.get_head()->buf, 0, _block_size);
+//				_zero = _current;
+//				// if _mark is valid, it must be at zero position
+//				if (UNLIKELY(!_mark.invalid)) _mark = _current;
+//			}
 		}
 
 		return true;
@@ -640,7 +650,7 @@ private:
 
 #undef SWAP_BYTE
 
-
+}
 }
 
 #endif /* _SAX_BUFFER_H_ */

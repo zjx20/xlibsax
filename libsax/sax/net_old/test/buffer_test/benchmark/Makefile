@@ -1,6 +1,6 @@
 
 INC := -I../../../../../ -I/usr/local/include/thrift
-LIB := -L../../../../../ -lpthread
+LIB := -L../../../../../ -lpthread -lsax
 
 ifeq '$(shell echo $${OSTYPE})' 'cygwin'
   INC += -I/cygdrive/e/lib/boost_1_48_0 -I/cygdrive/e/lib/thrift-0.7.0/thrift-0.7.0/lib/cpp/src

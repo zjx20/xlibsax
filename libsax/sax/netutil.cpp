@@ -145,7 +145,7 @@ bool transport::connect(const char* addr, uint16_t port_h, transport_id& tid)
 
 void transport::close(const transport_id& tid)
 {
-	if (UNLIKELY(_ctx[tid.fd].tid != tid)) return;
+	if (UNLIKELY(!(_ctx[tid.fd].tid == tid))) return;
 	g_eda_del(_eda, tid.fd);
 	g_close_socket(tid.fd);
 }

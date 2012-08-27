@@ -37,9 +37,6 @@ void* g_fsb_getblock(struct fsb_pool_t *pool, uint64_t key);
 /** c: fixed-size-block allocator with a linked list of freed block */
 typedef struct g_xslab_t g_xslab_t;
 
-/////////////////////////////////////////////////////////
-// functions for memory manage, not thread-safe
-
 g_xslab_t* g_xslab_init(int32_t size);
 void g_xslab_destroy(g_xslab_t* slab);
 

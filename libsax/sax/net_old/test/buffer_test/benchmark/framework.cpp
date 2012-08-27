@@ -18,6 +18,9 @@
 #include "new_old/buffer.h"
 #include "new_old/t_buffer_transport.h"
 
+#include "new_new/buffer.h"
+#include "new_new/t_buffer_transport.h"
+
 #include "old/buffer.h"
 #include "old/t_buffer_transport.h"
 
@@ -411,6 +414,39 @@ void test6()
 
 	//if(0)
 	{
+		boost::shared_ptr<sax::newnew::TBufferTransport> transport(new sax::newnew::TBufferTransport());
+		boost::shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
+
+		g_xslab_t* slab = g_xslab_init(1024);
+
+		{
+			// 134 * 1000000 / 1024 = 130859
+			static void* ptr[130859 + 10];
+
+			for(int i=0;i<130859 + 10;i++) {
+				ptr[i] = g_xslab_alloc(slab);
+			}
+
+			for(int i=0;i<130859 + 10;i++) {
+				g_xslab_free(slab, ptr[i]);
+			}
+
+			sax::newnew::buffer buf(slab);
+
+			transport->set_buffer(&buf, false);
+
+			clock_t start = clock();
+			do_bench2<sax::newnew::TBufferTransport, sax::newnew::buffer>(protocol.get(), transport.get());
+			clock_t end = clock();
+
+			printf("test6: newnew buffer use %lfs\n", (end - start) * 1.0 / CLOCKS_PER_SEC);
+		}
+
+		g_xslab_destroy(slab);
+	}
+
+	//if(0)
+	{
 		boost::shared_ptr<sax::newold::TBufferTransport> transport(new sax::newold::TBufferTransport());
 		boost::shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
 
@@ -435,7 +471,7 @@ void test6()
 		do_bench2<sax::newold::TBufferTransport, sax::newold::buffer>(protocol.get(), transport.get());
 		clock_t end = clock();
 
-		printf("test6: new buffer use %lfs\n", (end - start) * 1.0 / CLOCKS_PER_SEC);
+		printf("test6: newold buffer use %lfs\n", (end - start) * 1.0 / CLOCKS_PER_SEC);
 	}
 
 	//if(0)
@@ -458,11 +494,11 @@ void test6()
 
 int main()
 {
-	//test1();
-	//test2();
-	//test3();
-	//test4();
-	//test5();
+//	test1();
+//	test2();
+//	test3();
+//	test4();
+//	test5();
 	test6();
 
 	return 0;
