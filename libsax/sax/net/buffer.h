@@ -16,6 +16,7 @@
 #include "sax/mempool.h"
 #include "sax/os_types.h"
 #include "sax/compiler.h"
+#include "sax/os_api.h"
 
 #undef __SWAP_BYTE
 #define __SWAP_BYTE(a, p1, p2) a[p1] ^= a[p2]; a[p2] ^= a[p1]; a[p1] ^= a[p2]
@@ -28,22 +29,21 @@ class _linked_list
 {
 public:
 	_linked_list() :
-		_head(NULL), _tail(NULL) {}
-	virtual ~_linked_list() {}
+		_head(NULL), _tail(NULL), _size(0) {}
+	~_linked_list() {}
 
 	inline void push_back(T* node)
 	{
 		if (UNLIKELY(_tail == NULL)) {
 			_head = _tail = node;
 			node->next = NULL;
-			node->prev = NULL;
 		}
 		else {
 			node->next = NULL;
-			node->prev = _tail;
 			_tail->next = node;
 			_tail = node;
 		}
+		++_size;
 	}
 
 	inline T* pop_front()
@@ -54,8 +54,8 @@ public:
 		else {
 			T* ret = _head;
 			_head = _head->next;
-			if (UNLIKELY(_head != NULL)) _head->prev = NULL;
-			else _tail = NULL;
+			--_size;
+			if (UNLIKELY(_head == NULL)) _tail = NULL;
 			return ret;
 		}
 	}
@@ -65,22 +65,15 @@ public:
 		return _head;
 	}
 
-	inline void roll(T* pos)
+	inline int32_t get_size()
 	{
-		T* new_tail = pos->prev;
-		if (new_tail == NULL) return;
-
-		_tail->next = _head;
-		_head->prev = _tail;
-		new_tail->next = NULL;
-		pos->prev = NULL;
-		_head = pos;
-		_tail = new_tail;
+		return _size;
 	}
 
 private:
 	T* _head;
 	T* _tail;
+	int32_t _size;
 };
 
 
@@ -91,7 +84,6 @@ class buffer
 
 	struct buffer_block {
 		buffer_block* next;
-		buffer_block* prev;
 		uint8_t buf[1];
 	};
 
@@ -99,14 +91,14 @@ class buffer
 
 	struct pos {
 		inline pos() :
-				block(NULL), curr_buf(NULL), remaining(0),
-				position(0), invalid(true)
+				position(0), block(NULL), curr_buf(NULL),
+				remaining(0), invalid(true)
 		{}
 
 		inline pos(buffer_block* block_, uint8_t *curr_buf_, size_t position_,
 				size_t remaining_, bool invalid_ = false) :
-			block(block_), curr_buf(curr_buf_), remaining(remaining_),
-			position(position_), invalid(invalid_)
+				position(position_), block(block_), curr_buf(curr_buf_),
+				remaining(remaining_), invalid(invalid_)
 		{}
 
 		inline pos(const pos& p)
@@ -133,27 +125,22 @@ class buffer
 			invalid = true;
 		}
 
+		size_t position;
 		buffer_block* block;
 		uint8_t* curr_buf;
 		size_t remaining;
-		size_t position;
 		bool invalid;
 	};
 
 	typedef _linked_list<buffer_block> buf_list_type;
 
 public:
-	buffer(g_xslab_t* slab) throw (std::bad_alloc)
+	buffer() throw (std::bad_alloc)
 	{
-		// block size must large than the size of buffer_block in this implement
-		assert((size_t) g_xslab_alloc_size(slab) >= sizeof(buffer_block));
-
-		_block_size = g_xslab_alloc_size(slab) - offsetof(buffer::buffer_block, buf);
-
-		_slab = slab;
+		_block_size = g_shm_unit() - offsetof(buffer::buffer_block, buf);
 
 		buffer_block* first = alloc_node();
-		if (first == NULL) throw std::bad_alloc();
+		if (UNLIKELY(first == NULL)) throw std::bad_alloc();
 		_buf_list.push_back(first);
 
 		_capacity = _block_size;
@@ -162,7 +149,7 @@ public:
 		_zero = _current;
 	}
 
-	virtual ~buffer()
+	~buffer()
 	{
 		buffer_block* node = NULL;
 		while((node = _buf_list.pop_front()) != NULL) {
@@ -239,11 +226,22 @@ public:
 	// set this buffer to initial state
 	inline void clear()
 	{
+		if (_buf_list.get_size() > 1) {
+			buffer_block* first_block = _buf_list.pop_front();
+			buffer_block* block = NULL;
+			while ((block = _buf_list.pop_front()) != NULL) {
+				free_node(block);
+			}
+			_buf_list.push_back(first_block);
+		}
+
+		_capacity = _block_size;
 		_usable = _capacity;
 
-		_current = pos(_buf_list.get_head(),
+		_zero = pos(_buf_list.get_head(),
 				_buf_list.get_head()->buf, 0, _block_size);
-		_zero = _current;
+		_current = _zero;
+
 		_mark.set_invalid();
 		_limit.set_invalid();
 	}
@@ -272,20 +270,21 @@ public:
 		if (UNLIKELY(_limit.invalid)) return false;
 
 		if (_limit.position == _current.position) {
-			_zero = pos(_buf_list.get_head(), _buf_list.get_head()->buf, 0, _block_size);
+			_zero = pos(_current.block, _current.block->buf, 0, _block_size);
 			_current = _zero;
-			_usable = _capacity;
 		}
 		else {
 			_zero = pos(_current.block, _current.curr_buf, 0, _current.remaining);
-			_usable = _capacity - (_block_size - _zero.remaining);
-
-			// fix buffer_block, move previous buffer_block to the end of _buf_list
-			_buf_list.roll(_current.block);
-
 			_current = pos(_limit.block, _limit.curr_buf,
 					_limit.position - _current.position, _limit.remaining);
 		}
+
+		while (UNLIKELY(_buf_list.get_head() != _zero.block)) {
+			free_node(_buf_list.pop_front());
+			_capacity -= _block_size;
+		}
+
+		_usable = _capacity - (_block_size - _zero.remaining);
 
 		_mark.set_invalid();
 		_limit.set_invalid();
@@ -603,25 +602,24 @@ private:
 
 	inline buffer_block* alloc_node()
 	{
-		return reinterpret_cast<buffer_block*>(g_xslab_alloc(_slab));
+		return reinterpret_cast<buffer_block*>(g_shm_alloc_pages(1));
 	}
 
 	inline void free_node(buffer_block* node)
 	{
-		g_xslab_free(_slab, node);
+		g_shm_free_pages(node);
 	}
 
 private:
-	g_xslab_t* _slab;
-	size_t _block_size;
-
-	size_t _capacity;
-	size_t _usable;
-
 	pos _current;
 	pos _zero;
 	pos _mark;
 	pos _limit;		// reading limit
+
+	size_t _block_size;
+
+	size_t _capacity;
+	size_t _usable;
 
 	_linked_list<buffer_block> _buf_list;
 };

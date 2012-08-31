@@ -23,8 +23,6 @@ transport::transport()
 	_seq = 0;
 	_ctx = NULL;
 	_eda = NULL;
-	_buffer_slab = NULL;
-	_buffer_block_slab = NULL;
 	_inited = false;
 	_cloned = false;
 }
@@ -42,9 +40,6 @@ transport::~transport()
 	g_eda_close(_eda);
 	_eda = NULL;
 
-	g_xslab_destroy(_buffer_slab);
-	g_xslab_destroy(_buffer_block_slab);
-
 	if (!_cloned) {
 		delete _handler;
 		_handler = NULL;
@@ -55,12 +50,6 @@ transport::~transport()
 
 bool transport::init(int32_t maxfds, transport_handler* handler)
 {
-	_buffer_slab = g_xslab_init(sizeof(buffer));
-	_buffer_block_slab = g_xslab_init(BUFFER_BLOCK_SIZE);
-	if (!_buffer_slab || !_buffer_block_slab) {
-		goto init_error;
-	}
-
 	_eda = g_eda_open(maxfds, eda_callback, (void*) this);
 	if (!_eda) goto init_error;
 
@@ -79,13 +68,9 @@ bool transport::init(int32_t maxfds, transport_handler* handler)
 	return true;
 
 init_error:
-	if (_buffer_slab) g_xslab_destroy(_buffer_slab);
-	if (_buffer_block_slab) g_xslab_destroy(_buffer_block_slab);
 	if (_eda) g_eda_close(_eda);
 	if (_ctx) delete[] _ctx;
 
-	_buffer_slab = NULL;
-	_buffer_block_slab = NULL;
 	_eda = NULL;
 	_ctx = NULL;
 
@@ -95,12 +80,6 @@ init_error:
 bool transport::clone(const transport& source, transport_handler* handler)
 {
 	if (!source._inited) return false;
-
-	_buffer_slab = g_xslab_init(sizeof(buffer));
-	_buffer_block_slab = g_xslab_init(BUFFER_BLOCK_SIZE);
-	if (!_buffer_slab || !_buffer_block_slab) {
-		goto clone_error;
-	}
 
 	_eda = g_eda_open(source._maxfds, eda_callback, (void*) this);
 	if (!_eda) goto clone_error;
@@ -114,12 +93,8 @@ bool transport::clone(const transport& source, transport_handler* handler)
 	return true;
 
 clone_error:
-	if (_buffer_slab) g_xslab_destroy(_buffer_slab);
-	if (_buffer_block_slab) g_xslab_destroy(_buffer_block_slab);
 	if (_eda) g_eda_close(_eda);
 
-	_buffer_slab = NULL;
-	_buffer_block_slab = NULL;
 	_eda = NULL;
 
 	return false;
@@ -136,35 +111,12 @@ bool transport::add_fd(int fd, int eda_mask, const char* addr, uint16_t port_h,
 bool transport::add_fd(int fd, int eda_mask, uint32_t ip_n, uint16_t port_h,
 		context::TYPE type)
 {
-	if (UNLIKELY(fd >= _maxfds)) {
+	if (UNLIKELY(fd >= _maxfds ||
+			g_eda_add(_eda, fd, eda_mask) != 0)) {
 		return false;
 	}
 
 	context& ctx = _ctx[fd];
-
-	if (LIKELY(type == context::TCP_CONNECTION)) {
-		void* write_buf_mem = g_xslab_alloc(_buffer_slab);
-		void* read_buf_mem = g_xslab_alloc(_buffer_slab);
-		if (UNLIKELY(!write_buf_mem || !read_buf_mem)) {
-			if (write_buf_mem) g_xslab_free(_buffer_slab, write_buf_mem);
-			if (read_buf_mem) g_xslab_free(_buffer_slab, read_buf_mem);
-			return false;
-		}
-
-		// TODO: modify buffer() as no throw
-		ctx.write_buf = new (write_buf_mem) buffer(_buffer_block_slab);
-		ctx.read_buf = new (read_buf_mem) buffer(_buffer_block_slab);
-	}
-	else {
-		ctx.write_buf = NULL;
-		ctx.read_buf = NULL;
-	}
-
-	if (UNLIKELY(g_eda_add(_eda, fd, eda_mask) != 0)) {
-		// TODO: release the buffers allocated above
-		return false;
-	}
-
 	ctx.ip_n = ip_n;
 	ctx.port_h = port_h;
 	ctx.type = type;
@@ -253,20 +205,8 @@ void transport::close(const id& tid)
 
 	_ctx[tid.fd].tid.seq = -1;
 
-	buffer*& write_buf = _ctx[tid.fd].write_buf;
-	buffer*& read_buf = _ctx[tid.fd].read_buf;
-
-	if (LIKELY(write_buf)) {
-		write_buf->~buffer();
-		g_xslab_free(_buffer_slab, write_buf);
-		write_buf = NULL;
-	}
-
-	if (LIKELY(read_buf)) {
-		read_buf->~buffer();
-		g_xslab_free(_buffer_slab, read_buf);
-		read_buf = NULL;
-	}
+	_ctx[tid.fd].write_buf.clear();
+	_ctx[tid.fd].read_buf.clear();
 
 	// should close socket at last, to avoid concurrent problem
 	g_close_socket(tid.fd);
@@ -316,8 +256,7 @@ void transport::eda_callback(g_eda_t* mgr, int fd, void* user_data, int mask)
 	}
 }
 
-bool transport::handle_tcp_write(transport* trans, int fd,
-		const context& ctx)
+bool transport::handle_tcp_write(transport* trans, int fd, context& ctx)
 {
 	/*
 	 * behavior of tcp write,
@@ -330,22 +269,22 @@ bool transport::handle_tcp_write(transport* trans, int fd,
 	 * 4. return other error if socket is broken when sending.
 	 */
 
-	buffer* buf = ctx.write_buf;
+	buffer& buf = ctx.write_buf;
 	// TODO: eliminate data copying
 	char temp[1024];
 
-	buf->flip();
+	buf.flip();
 
 	LOG_TRACE("in handle_tcp_write()," <<
 			" thread_id: " << g_thread_id() <<
 			" trans: " << (intptr_t) trans <<
 			" fd: " << fd <<
-			" buf->remaining(): " << buf->remaining());
+			" buf->remaining(): " << buf.remaining());
 
-	while (buf->remaining()) {
-		buf->mark();
-		int len = (int) (sizeof(temp) < buf->remaining() ? sizeof(temp) : buf->remaining());
-		buf->get((uint8_t*) temp, len);
+	while (buf.remaining()) {
+		buf.mark();
+		int len = (int) (sizeof(temp) < buf.remaining() ? sizeof(temp) : buf.remaining());
+		buf.get((uint8_t*) temp, len);
 		int ret = g_tcp_write(fd, temp, len);
 
 		LOG_TRACE("in handle_tcp_write()," <<
@@ -358,9 +297,9 @@ bool transport::handle_tcp_write(transport* trans, int fd,
 		if (LIKELY(ret > 0)) {
 			if (ret < len) {
 				// io buffer is full, wait for next time
-				buf->reset();
-				buf->skip(ret);
-				buf->compact();
+				buf.reset();
+				buf.skip(ret);
+				buf.compact();
 				return true;
 			}
 		}
@@ -368,8 +307,8 @@ bool transport::handle_tcp_write(transport* trans, int fd,
 			if (LIKELY(errno == EAGAIN || errno == EWOULDBLOCK ||
 					errno == EINTR)) {
 				// io buffer is full, wait for next time
-				buf->reset();
-				buf->compact();
+				buf.reset();
+				buf.compact();
 				return true;
 			}
 			else {
@@ -382,7 +321,7 @@ bool transport::handle_tcp_write(transport* trans, int fd,
 		}
 	}
 
-	buf->compact();
+	buf.compact();
 
 	// nothing to send, turn off EDA_WRITE
 	trans->toggle_write(fd, false);
@@ -397,13 +336,13 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 		return false;
 	}
 
-	buffer* write_buf = _ctx[tid.fd].write_buf;
-	if (UNLIKELY(!write_buf->reserve(write_buf->position() + length))) {
+	buffer& write_buf = _ctx[tid.fd].write_buf;
+	if (UNLIKELY(!write_buf.reserve(write_buf.position() + length))) {
 		// no memory for writing
 		return false;
 	}
 
-	if (write_buf->position() == 0) {
+	if (write_buf.position() == 0) {
 		// send it directly, do not wait for eda_poll()
 		int len = length;
 		char* temp = const_cast<char*>(buf);
@@ -420,20 +359,19 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 						" errno: " << errno);
 
 				// maybe a real error happened, just ignore it here
-				write_buf->put((uint8_t*) temp, len);
+				write_buf.put((uint8_t*) temp, len);
 				toggle_write(tid.fd, true);
 			}
 		}
 	}
 	else {
-		write_buf->put((uint8_t*) buf, length);
+		write_buf.put((uint8_t*) buf, length);
 	}
 
 	return true;
 }
 
-bool transport::handle_tcp_read(transport* trans, int fd,
-		const context& ctx)
+bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 {
 	/*
 	 * behavior of tcp read,
@@ -448,18 +386,18 @@ bool transport::handle_tcp_read(transport* trans, int fd,
 			" fd: " << fd);
 
 	const int max_recv_once = 16 * 1024;	// TODO: magic number
-	buffer* buf = ctx.read_buf;
+	buffer& buf = ctx.read_buf;
 	int remaining = max_recv_once;	// do not read too much for one fd
 	// TODO: eliminate data copying
 	char temp[1024];
 	while (remaining > 0) {
-		if (UNLIKELY(!buf->reserve(buf->position() + sizeof(temp)))) {
+		if (UNLIKELY(!buf.reserve(buf.position() + sizeof(temp)))) {
 			// no memory for receiving
 			break;
 		}
 		int ret = g_tcp_read(fd, temp, sizeof(temp));
 		if (LIKELY(ret > 0)) {
-			buf->put((uint8_t*) temp, ret);
+			buf.put((uint8_t*) temp, ret);
 			remaining -= ret;
 			if (ret < (int) sizeof(temp)) {
 				// io buffer is empty, wait for next time
@@ -495,11 +433,11 @@ bool transport::handle_tcp_read(transport* trans, int fd,
 		}
 	}
 
-	buf->flip();
+	buf.flip();
 
-	trans->_handler->on_tcp_recieved(ctx.tid, buf);
+	trans->_handler->on_tcp_recieved(ctx.tid, &buf);
 
-	if (UNLIKELY(ctx.tid.seq != -1 && buf->data_length() == (size_t) -1)) {
+	if (UNLIKELY(ctx.tid.seq != -1 && buf.data_length() == (size_t) -1)) {
 		fprintf(stderr, "buf->compact() must be called in on_tcp_recieved().\n");
 		assert(0);
 	}
@@ -509,7 +447,7 @@ bool transport::handle_tcp_read(transport* trans, int fd,
 
 bool transport::handle_tcp_accept(transport* trans, int fd)
 {
-	const int max_accept_once = 16;	// TODO: magic number
+	const int max_accept_once = 64;	// TODO: magic number
 	int remaining = max_accept_once;
 	while (remaining > 0) {
 		uint32_t ip_n;
@@ -546,8 +484,7 @@ bool transport::handle_tcp_accept(transport* trans, int fd)
 	return true;
 }
 
-bool transport::handle_udp_read(transport* trans, int fd,
-		const context& ctx)
+bool transport::handle_udp_read(transport* trans, int fd, context& ctx)
 {
 	/*
 	 * behavior of udp read,

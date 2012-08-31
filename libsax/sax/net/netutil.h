@@ -64,8 +64,8 @@ private:
 		uint16_t port_h;
 		uint32_t ip_n;
 		id       tid;
-		buffer*  read_buf;
-		buffer*  write_buf;
+		buffer   read_buf;
+		buffer   write_buf;
 	};
 
 public:
@@ -111,13 +111,10 @@ private:
 	static void eda_callback(g_eda_t* mgr, int fd, void* user_data, int mask);
 
 	static bool handle_tcp_accept(transport* trans, int fd);
-	static bool handle_tcp_write(transport* trans, int fd,
-			const context& ctx);
-	static bool handle_tcp_read(transport* trans, int fd,
-			const context& ctx);
+	static bool handle_tcp_write(transport* trans, int fd, context& ctx);
+	static bool handle_tcp_read(transport* trans, int fd, context& ctx);
 
-	static bool handle_udp_read(transport* trans, int fd,
-			const context& ctx);
+	static bool handle_udp_read(transport* trans, int fd, context& ctx);
 
 private:
 	transport_handler* _handler;
@@ -125,9 +122,6 @@ private:
 	g_eda_t*   _eda;
 	int32_t    _maxfds;
 	int32_t    _seq;
-
-	g_xslab_t* _buffer_slab;
-	g_xslab_t* _buffer_block_slab;
 
 	bool       _inited;
 	bool       _cloned;
