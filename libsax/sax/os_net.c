@@ -166,10 +166,9 @@ int g_inet_aton(const char* addr, uint32_t* ip)
 	return 0;
 }
 
-int g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len)
+const char* g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len)
 {
-	inet_ntop(AF_INET, &ip, ip_s, len);
-	return 0;
+	return inet_ntop(AF_INET, &ip, ip_s, len);
 }
 
 uint32_t g_htonl(uint32_t hostlong)
@@ -323,9 +322,9 @@ quit:
 int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h)
 {
 	struct sockaddr_in sa;
-	socklen_t len = 0;
+	socklen_t len = sizeof(struct sockaddr_in);
 	int got = recvfrom(fd, (char *) buf,
-		count, 0, (struct sockaddr *)&sa, &len);
+		count, MSG_TRUNC, (struct sockaddr *)&sa, &len);
 	if (got > 0) {
 		if (ip_n) *ip_n = sa.sin_addr.s_addr;
 		if (port_h) *port_h = ntohs(sa.sin_port);
@@ -335,12 +334,19 @@ int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h
 
 int g_udp_write(int fd, const void *buf, int n, const char *ip, int port)
 {
+	uint32_t ip_n;
+	if (g_inet_aton(ip, &ip_n) != 0) return -1;
+	return g_udp_write2(fd, buf, n, ip_n, (uint16_t) port);
+}
+
+int g_udp_write2(int fd, const void *buf, int n, uint32_t ip_n, uint16_t port_h)
+{
 	int closefd = 0;
 	int ret = 0;
 	struct sockaddr_in sa;
 	sa.sin_family = AF_INET;
-	sa.sin_port = htons((u_short) port);
-	if (g_inet_aton(ip, &sa.sin_addr.s_addr) != 0) return -1;
+	sa.sin_port = htons(port_h);
+	sa.sin_addr.s_addr = ip_n;
 	if (fd < 0) {
 		fd = socket(AF_INET, SOCK_DGRAM, 0);
 		if (fd == -1) return -1;
@@ -385,7 +391,8 @@ g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
 
 	h->epfd = epoll_create(1024);	// 1024 just a hint for kernel. for more details, man epoll_create()
 	if (h->epfd == -1) {
-		perror("in g_eda_open() calling epoll_create()");
+		fprintf(stderr, "error happened when calling epoll_create() in g_eda_open(). errno: %d %s\n",
+				errno, strerror(errno));
 		free(h);
 		return NULL;
 	}
@@ -410,17 +417,19 @@ int g_eda_add(g_eda_t* mgr, int fd, int mask)
 	ee.events = 0;
 	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
-	ee.data.fd = fd;
+	ee.data.u64 = fd;	// make valgrind silence
 
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee) == 0 )) return 0;
-	perror("in g_eda_add() calling epoll_ctl()");
+	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_add(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
 	return -1;
 }
 
 int g_eda_del(g_eda_t* mgr, int fd)
 {
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL) == 0 )) return 0;
-	perror("in g_eda_del() calling epoll_ctl()");
+	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_del(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
 	return -1;
 }
 
@@ -430,9 +439,10 @@ void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 	ee.events = 0;
 	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
-	ee.data.fd = fd;
+	ee.data.u64 = fd;	// make valgrind silence
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) return;
-	perror("in g_eda_mod() calling epoll_ctl()");
+	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_mod(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
 }
 
 int g_eda_poll(g_eda_t* mgr, int msec)
@@ -441,7 +451,7 @@ int g_eda_poll(g_eda_t* mgr, int msec)
 	epoll_event* ee_ptr = mgr->events;
 	int i;
 	for (i = 0; i < nfds; i++, ee_ptr++) {
-		int fd = ee_ptr->data.fd;
+		int fd = (int) ee_ptr->data.u64;
 		int mask = 0;
 		mask |= (ee_ptr->events & EPOLLIN) ? EDA_READ : 0;
 		mask |= (ee_ptr->events & EPOLLOUT) ? EDA_WRITE : 0;

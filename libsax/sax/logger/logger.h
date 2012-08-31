@@ -55,17 +55,17 @@ void fast_localtime(int64_t unix_sec, struct tm* st);
 
 #if __LOGGING_SYNC
 #define __LOGGING_LOG_SYNC(logger, x, buf) \
-	__LOGGING_LOG_SERIALIZE(x, buf, serializer); \
-	logger->log(serializer.data(), serializer.length())
+	__LOGGING_LOG_SERIALIZE(x, buf, __sax_logging_serializer); \
+	logger->log(__sax_logging_serializer.data(), __sax_logging_serializer.length())
 
 #define __LOGGING_LOG_LARGE_LOG(logger, size, x) \
-	char* buf = new char[size]; \
-	__LOGGING_LOG_SYNC(logger, x, buf); \
-	delete[] buf
+	char* __sax_logging_buf = new char[size]; \
+	__LOGGING_LOG_SYNC(logger, x, __sax_logging_buf); \
+	delete[] __sax_logging_buf
 
 #define __LOGGING_LOG_DO(logger, size_level, x) \
-	char buf[size_level]; \
-	__LOGGING_LOG_SYNC(logger, x, buf)
+	char __sax_logging_buf[size_level]; \
+	__LOGGING_LOG_SYNC(logger, x, __sax_logging_buf)
 #else
 #define __LOGGING_LOG_LARGE_LOG(logger, size, x) // TODO: fixme
 #define __LOGGING_LOG_DO(logger, size_level, x) \
@@ -108,11 +108,14 @@ void fast_localtime(int64_t unix_sec, struct tm* st);
 	}
 
 
-#define LOGGING_SCOPE(logger, level) \
-	if (__LOGGING_GET_LEVEL(logger) <= sax::logger::level)
+#define LOGGING_SCOPE(logger_, level) \
+	if (__LOGGING_GET_LEVEL(logger_) <= sax::logger::level)
 
-#define __LOG_BASE(logger, x, level, file, line_num) \
-	LOGGING_SCOPE(logger, level) { \
+#ifdef LOG_OFF
+#define __LOG_BASE(logger_, x, level, file, line_num)
+#else
+#define __LOG_BASE(logger_, x, level, file, line_num) \
+	LOGGING_SCOPE(logger_, level) { \
 		using namespace sax::logger; \
 		/*log_header: "[20120822 11:34:27.456789][TRACE][filename.cpp:123] "*/ \
 		char log_header[26 /*datetime*/ + \
@@ -126,8 +129,9 @@ void fast_localtime(int64_t unix_sec, struct tm* st);
 				st.tm_year + 1900, st.tm_mon + 1, st.tm_mday, \
 				st.tm_hour, st.tm_min, st.tm_sec, (int) (now_us % 1000000), \
 				#level + 4, file, line_num); \
-		__LOGGING_LOG(logger, log_header << x); \
+		__LOGGING_LOG(logger_, log_header << x); \
 	}
+#endif
 
 #define LOGP_TRACE(logger, x) __LOG_BASE(logger, x, SAX_TRACE, __FILE__, __LINE__)
 #define LOGP_DEBUG(logger, x) __LOG_BASE(logger, x, SAX_DEBUG, __FILE__, __LINE__)
@@ -145,7 +149,11 @@ extern log_file_writer<mutex_type>* __global_sync_logger;
 bool init_global_sync_logger(const std::string& logfile_name,
 		int32_t max_logfiles, size_t size_per_logfile, log_level level);
 
-#define INIT_GLOBAL_LOGGER(...) init_global_sync_logger(__VA_ARGS__)
+#ifdef LOG_OFF
+#define INIT_GLOBAL_LOGGER(...)
+#else
+#define INIT_GLOBAL_LOGGER(...) sax::logger::init_global_sync_logger(__VA_ARGS__)
+#endif
 
 #else
 #endif

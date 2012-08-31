@@ -1693,6 +1693,10 @@ int g_shm_unit(void)
 	return info.dwAllocationGranularity;
 }
 
+void* g_shm_alloc_pages(uint32_t pages)
+{
+#warning "g_shm_alloc_pages() is not implemented in windows."
+}
 
 #else // OS=!WIN32
 
@@ -3026,6 +3030,16 @@ int g_shm_sync(const shm_t *map, uint32_t s, uint32_t c)
 int g_shm_unit(void)
 {
 	return sysconf(_SC_PAGESIZE);
+}
+
+void* g_shm_alloc_pages(uint32_t pages)
+{
+	return valloc(g_shm_unit() * pages);
+}
+
+void g_shm_free_pages(void* ptr)
+{
+	free(ptr);
 }
 
 #endif // OS=!WIN32

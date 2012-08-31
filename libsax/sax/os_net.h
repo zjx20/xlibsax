@@ -15,7 +15,7 @@ void g_net_clean();
 // convert hostname or ip string to network byte order uint32_t ip
 int g_inet_aton(const char* addr, uint32_t* ip);
 // convert network byte order uint32_t ip to ip string, thread safe
-int g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len);
+const char* g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len);
 
 uint32_t g_htonl(uint32_t hostlong);
 uint16_t g_htons(uint16_t hostshort);
@@ -31,8 +31,10 @@ int g_tcp_read(int fd, void *buf, size_t count);
 int g_tcp_write(int fd, const void *buf, size_t count);
 
 int g_udp_open(const char *addr, int port);
+// return the real packet size if it was truncated
 int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h);
 int g_udp_write(int fd, const void *buf, int n, const char *ip, int port);
+int g_udp_write2(int fd, const void *buf, int n, uint32_t ip_n, uint16_t port_h);
 
 void g_close_socket(int fd);
 

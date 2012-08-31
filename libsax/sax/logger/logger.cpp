@@ -5,6 +5,7 @@
  *      Author: x
  */
 
+#include <stdio.h>
 #include <time.h>
 #include "sax/compiler.h"
 #include "sax/os_api.h"

@@ -480,6 +480,15 @@ int g_shm_sync(const shm_t *map, uint32_t s, uint32_t c);
 /// @return memory allocation granularity
 int g_shm_unit(void);
 
+/// @brief Allocate numbers of entire page(g_shm_unit()) memory.
+/// @param pages number of page would like to allocate.
+/// @return NULL for failed, otherwise the returning address is align
+///         with system page boundary.
+void* g_shm_alloc_pages(uint32_t pages);
+
+/// @brief Deallocate memory that allocated from g_shm_alloc_pages().
+/// @param ptr memory address to free.
+void g_shm_free_pages(void* ptr);
 
 //-------------------------------------------------------------------------
 //------------- (g) API for mixed file (shm_t + f64_t) --------------------

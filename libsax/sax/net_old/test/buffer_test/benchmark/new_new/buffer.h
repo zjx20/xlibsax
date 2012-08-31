@@ -195,30 +195,32 @@ public:
 	inline bool preappend(size_t length)
 	{
 		if (UNLIKELY(!_limit.invalid ||
-				!reserve(_current.position + length))) return false;
-		_mark = _current;
-		if (UNLIKELY(length == 0)) {
-			return true;
+				(_usable < (_current.position + length + 1) &&
+						!reserve(_current.position + length + 1)))) {
+			return false;
 		}
-		else if(LIKELY(length < _current.remaining)) {
+
+		_mark = _current;
+
+		if(LIKELY(length < _current.remaining)) {
 			// speed up
 			_current.curr_buf += length;
 			_current.remaining -= length;
 			_current.position += length;
 		}
 		else {
-			size_t remaining = length;
+			size_t remaining = length - _current.remaining;
 			do {
-				size_t tmp = remaining < _current.remaining ? remaining : _current.remaining;
+				_current.block = _current.block->next;
+				_current.curr_buf = _current.block->buf;
+				_current.remaining = _block_size;
+
+				size_t tmp = remaining;
+				if (UNLIKELY(remaining > _current.remaining)) tmp = _current.remaining;
 				remaining -= tmp;
 				_current.curr_buf += tmp;
 				_current.remaining -= tmp;
-				if (_current.remaining == 0 && _current.block->next != NULL) {
-					_current.block = _current.block->next;
-					_current.curr_buf = _current.block->buf;
-					_current.remaining = _block_size;
-				}
-			} while(remaining > 0);
+			} while(UNLIKELY(remaining > 0));
 
 			_current.position += length;
 		}
@@ -383,7 +385,8 @@ public:
 	// return false when length > remaining(), and do nothing
 	inline bool get(uint8_t buf[], size_t length)
 	{
-		if (UNLIKELY(_limit.invalid || (remaining() < length))) {
+		if (UNLIKELY(_limit.invalid ||
+				(_limit.position - _current.position < length))) {
 			return false;
 		}
 
@@ -428,13 +431,15 @@ public:
 	// notice: buf's position will advance length bytes if succeeded
 	inline bool get(buffer& buf, size_t length)
 	{
-		if (UNLIKELY(_limit.invalid || (remaining() < length))) {
+		if (UNLIKELY(_limit.invalid ||
+				(_limit.position - _current.position < length))) {
 			return false;
 		}
 
 		// check buf is writable
 		if (UNLIKELY(!buf._limit.invalid ||
-				!buf.reserve(buf._current.position + length + 1))) {
+				(buf._usable < (buf._current.position + length + 1) &&
+						!buf.reserve(buf._current.position + length + 1)))) {
 			return false;
 		}
 
@@ -510,7 +515,10 @@ public:
 	inline bool put(uint8_t buf[], size_t length)
 	{
 		if (UNLIKELY(!_limit.invalid ||
-				!reserve(_current.position + length + 1))) return false;
+				(_usable < (_current.position + length + 1) &&
+						!reserve(_current.position + length + 1)))) {
+			return false;
+		}
 
 		/*
 		 * there is a thick in "reserve(_current.position + length + 1)",
@@ -604,15 +612,6 @@ public:
 			_buf_list.push_back(node);
 			_capacity += _block_size;
 			_usable += _block_size;
-
-//			// _current.block == NULL in the initial state of buffer
-//			if (UNLIKELY(_current.block == NULL)) {
-//				assert(_current.position == 0);
-//				_current = pos(_buf_list.get_head(), _buf_list.get_head()->buf, 0, _block_size);
-//				_zero = _current;
-//				// if _mark is valid, it must be at zero position
-//				if (UNLIKELY(!_mark.invalid)) _mark = _current;
-//			}
 		}
 
 		return true;

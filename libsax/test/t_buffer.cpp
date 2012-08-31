@@ -160,9 +160,7 @@ TEST(buffer, empty)
 		EXPECT_EQ(0, buf.position());
 
 		EXPECT_EQ(0, buf.remaining());
-		EXPECT_EQ(0, buf.data_length());
-		EXPECT_FALSE(buf.has_remaining());
-		EXPECT_FALSE(buf.has_data());
+		EXPECT_EQ((size_t)-1, buf.data_length());
 
 		EXPECT_FALSE(buf.peek(tmp[0]));
 	}
@@ -191,10 +189,8 @@ TEST(buffer, writing_mode)
 		EXPECT_FALSE(buf.compact());
 
 		EXPECT_EQ(strlen(str) * 2, buf.data_length());
-		EXPECT_TRUE(buf.has_data());
 
-		//EXPECT_EQ(0, buf.remaining());
-		//EXPECT_FALSE(buf.has_remaining());
+		EXPECT_EQ(size_t(-1), buf.remaining());
 
 		EXPECT_TRUE(buf.flip());
 
@@ -227,9 +223,7 @@ TEST(buffer, reading_mode)
 		EXPECT_EQ(0, memcmp(tmp, str, 4));
 
 		EXPECT_EQ(strlen(str) - 4, buf.remaining());
-		EXPECT_TRUE(buf.has_remaining());
-		//EXPECT_EQ(0, buf.data_length());
-		//EXPECT_FALSE(buf.has_data());
+		EXPECT_EQ(size_t(-1), buf.data_length());
 
 		EXPECT_TRUE(buf.compact());
 		EXPECT_FALSE(buf.compact());
@@ -321,7 +315,7 @@ TEST(buffer, put_get_buffer)
 	g_xslab_destroy(slab);
 }
 
-TEST(buffer, seeking)	// preappend rewind
+TEST(buffer, seeking)	// skip rewind
 {
 	g_xslab_t* slab = g_xslab_init(1 + BLOCK_HEADER_SIZE);
 
@@ -389,7 +383,7 @@ TEST(buffer, seeking)	// preappend rewind
 		uint8_t tmp[100];
 
 		EXPECT_TRUE(buf.put((uint8_t*)"what ", 5));
-		EXPECT_TRUE(buf.preappend(2));
+		EXPECT_TRUE(buf.skip(2));
 		EXPECT_EQ(7, buf.position());
 		EXPECT_TRUE(buf.put((uint8_t*)"wonderful day", 13));
 		EXPECT_TRUE(buf.reset());
@@ -397,8 +391,9 @@ TEST(buffer, seeking)	// preappend rewind
 		EXPECT_TRUE(buf.reset());
 		EXPECT_TRUE(buf.flip());
 
+		EXPECT_TRUE(buf.skip(5));
 		EXPECT_TRUE(buf.get(tmp, buf.remaining()));
-		EXPECT_EQ(0, memcmp(tmp, "what a wonderful day", 20));
+		EXPECT_EQ(0, memcmp(tmp, "a wonderful day", 15));
 	}
 
 	g_xslab_destroy(slab);
@@ -415,10 +410,13 @@ TEST(buffer, clear)
 		buf.flip();
 
 		buf.clear();
-		EXPECT_EQ(8/*7 bytes + reserve() extra one*/, g_xslab_usable_amount(slab));
+
+		EXPECT_EQ(0, g_xslab_usable_amount(slab));
 		EXPECT_EQ(0, buf.position());
-		EXPECT_EQ(0, buf.capacity());
+		EXPECT_EQ(8, buf.capacity());
 	}
+
+	EXPECT_EQ(8/*7 bytes + reserve() extra one*/, g_xslab_usable_amount(slab));
 
 	g_xslab_destroy(slab);
 }
@@ -615,7 +613,7 @@ TEST(buffer, reserve)
 
 	{
 		buffer buf(slab);
-		buf.reserve(320);	// should alloc 4 block for 100 * 4 = 400 bytes
+		buf.reserve(300);	// should alloc 4 block for 100 * 4 = 400 bytes
 		EXPECT_EQ(400, buf.capacity());
 		EXPECT_EQ(0, buf.position());
 	}

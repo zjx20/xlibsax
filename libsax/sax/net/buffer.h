@@ -13,24 +13,12 @@
 #include <string.h>
 #include <assert.h>
 
-#include <algorithm>
-
 #include "sax/mempool.h"
 #include "sax/os_types.h"
 #include "sax/compiler.h"
 
-/*
- * TODO:
- * 1. replace memory pool with slab.	DONE
- * 2. replace bidirectional linked list with unidirectional linked list.	FAILED but optimized
- * 3. strict aliasing error in get(int) functions.	DONE
- * 4. call reserve() before calling other functions, do not call reserve() every time
- * 5. coding style.		DONE
- * 6. check all branch, add LIKELY or UNLIKELY if necessary.	DONE
- */
-
-#undef SWAP_BYTE
-#define SWAP_BYTE(a, p1, p2) a[p1] ^= a[p2]; a[p2] ^= a[p1]; a[p1] ^= a[p2]
+#undef __SWAP_BYTE
+#define __SWAP_BYTE(a, p1, p2) a[p1] ^= a[p2]; a[p2] ^= a[p1]; a[p1] ^= a[p2]
 
 namespace sax {
 
@@ -146,7 +134,7 @@ class buffer
 		}
 
 		buffer_block* block;
-		uint8_t *curr_buf;
+		uint8_t* curr_buf;
 		size_t remaining;
 		size_t position;
 		bool invalid;
@@ -191,41 +179,50 @@ public:
 
 	// use with reset()
 	// mark the current position and skip "length" bytes
-	inline bool preappend(size_t length)
+	inline bool skip(size_t length)
 	{
-		if (UNLIKELY(!_limit.invalid ||
-				!reserve(_current.position + length))) return false;
-		_mark = _current;
-		if (UNLIKELY(length == 0)) {
-			return true;
+		if (UNLIKELY(!_limit.invalid &&
+				_limit.position - _current.position < length)) {
+			// reading skip, no enough data to skip
+			return false;
 		}
-		else if(LIKELY(length < _current.remaining)) {
+
+		if (UNLIKELY(_limit.invalid &&
+				(_usable < (_current.position + length + 1) &&
+						!reserve(_current.position + length)))) {
+			// writing skip, no enough space to skip
+			return false;
+		}
+
+		_mark = _current;
+
+		if(LIKELY(length < _current.remaining)) {
 			// speed up
 			_current.curr_buf += length;
 			_current.remaining -= length;
 			_current.position += length;
 		}
 		else {
-			size_t remaining = length;
+			size_t remaining = length - _current.remaining;
 			do {
-				size_t tmp = remaining < _current.remaining ? remaining : _current.remaining;
+				_current.block = _current.block->next;
+				_current.curr_buf = _current.block->buf;
+				_current.remaining = _block_size;
+
+				size_t tmp = remaining;
+				if (UNLIKELY(remaining > _current.remaining)) tmp = _current.remaining;
 				remaining -= tmp;
 				_current.curr_buf += tmp;
 				_current.remaining -= tmp;
-				if (_current.remaining == 0 && _current.block->next != NULL) {
-					_current.block = _current.block->next;
-					_current.curr_buf = _current.block->buf;
-					_current.remaining = _block_size;
-				}
-			} while(remaining > 0);
+			} while(UNLIKELY(remaining > 0));
 
 			_current.position += length;
 		}
 		return true;
 	}
 
-	// use with mark() / preappend() / reset()
-	// set the current position to the marked position(by calling mark() or preappend()).
+	// use with mark() / skip() / reset()
+	// set the current position to the marked position(by calling mark() or skip()).
 	// there is a feature:
 	//		while restoring the marked position, current position will be marked(same as calling mark()),
 	//		so you can call reset() again to restore the position pointer.
@@ -242,18 +239,13 @@ public:
 	// set this buffer to initial state
 	inline void clear()
 	{
-		_capacity = 0;
-		_usable = 0;
+		_usable = _capacity;
 
-		_current = pos(NULL, 0, 0, false);
+		_current = pos(_buf_list.get_head(),
+				_buf_list.get_head()->buf, 0, _block_size);
 		_zero = _current;
 		_mark.set_invalid();
 		_limit.set_invalid();
-
-		buffer_block* node = NULL;
-		while ((node = _buf_list.pop_front()) != NULL) {
-			free_node(node);
-		}
 	}
 
 	// set position to zero, call reset() to restore
@@ -315,26 +307,16 @@ public:
 	// the returning value is invalid when writing
 	inline size_t remaining()
 	{
+		if (UNLIKELY(_limit.invalid)) return (size_t) -1;
 		return _limit.position - _current.position;
-	}
-
-	// return remaining() > 0
-	inline bool has_remaining()
-	{
-		return remaining() > 0;
 	}
 
 	// get the size of data, which has been wrote
 	// the returning value is invalid when reading
 	inline size_t data_length()
 	{
+		if (UNLIKELY(!_limit.invalid)) return (size_t) -1;
 		return _current.position;
-	}
-
-	// return data_length() > 0
-	inline bool has_data()
-	{
-		return data_length() > 0;
 	}
 
 	inline bool get(uint8_t& num)
@@ -347,7 +329,7 @@ public:
 		uint8_t buf[sizeof(num)];
 		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 1);
+			__SWAP_BYTE(buf, 0, 1);
 		}
 		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
 		return true;
@@ -358,8 +340,8 @@ public:
 		uint8_t buf[sizeof(num)];
 		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 3);
-			SWAP_BYTE(buf, 1, 2);
+			__SWAP_BYTE(buf, 0, 3);
+			__SWAP_BYTE(buf, 1, 2);
 		}
 		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
 		return true;
@@ -370,10 +352,10 @@ public:
 		uint8_t buf[sizeof(num)];
 		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 7);
-			SWAP_BYTE(buf, 1, 6);
-			SWAP_BYTE(buf, 2, 5);
-			SWAP_BYTE(buf, 3, 4);
+			__SWAP_BYTE(buf, 0, 7);
+			__SWAP_BYTE(buf, 1, 6);
+			__SWAP_BYTE(buf, 2, 5);
+			__SWAP_BYTE(buf, 3, 4);
 		}
 		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
 		return true;
@@ -382,7 +364,8 @@ public:
 	// return false when length > remaining(), and do nothing
 	inline bool get(uint8_t buf[], size_t length)
 	{
-		if (UNLIKELY(_limit.invalid || (remaining() < length))) {
+		if (UNLIKELY(_limit.invalid ||
+				(_limit.position - _current.position < length))) {
 			return false;
 		}
 
@@ -427,13 +410,15 @@ public:
 	// notice: buf's position will advance length bytes if succeeded
 	inline bool get(buffer& buf, size_t length)
 	{
-		if (UNLIKELY(_limit.invalid || (remaining() < length))) {
+		if (UNLIKELY(_limit.invalid ||
+				(_limit.position - _current.position < length))) {
 			return false;
 		}
 
 		// check buf is writable
 		if (UNLIKELY(!buf._limit.invalid ||
-				!buf.reserve(buf._current.position + length + 1))) {
+				(buf._usable < (buf._current.position + length + 1) &&
+						!buf.reserve(buf._current.position + length)))) {
 			return false;
 		}
 
@@ -479,7 +464,7 @@ public:
 	{
 		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 1);
+			__SWAP_BYTE(buf, 0, 1);
 		}
 		return put(buf, 2);
 	}
@@ -488,8 +473,8 @@ public:
 	{
 		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 3);
-			SWAP_BYTE(buf, 1, 2);
+			__SWAP_BYTE(buf, 0, 3);
+			__SWAP_BYTE(buf, 1, 2);
 		}
 		return put(buf, 4);
 	}
@@ -498,10 +483,10 @@ public:
 	{
 		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			SWAP_BYTE(buf, 0, 7);
-			SWAP_BYTE(buf, 1, 6);
-			SWAP_BYTE(buf, 2, 5);
-			SWAP_BYTE(buf, 3, 4);
+			__SWAP_BYTE(buf, 0, 7);
+			__SWAP_BYTE(buf, 1, 6);
+			__SWAP_BYTE(buf, 2, 5);
+			__SWAP_BYTE(buf, 3, 4);
 		}
 		return put(buf, 8);
 	}
@@ -509,13 +494,10 @@ public:
 	inline bool put(uint8_t buf[], size_t length)
 	{
 		if (UNLIKELY(!_limit.invalid ||
-				!reserve(_current.position + length + 1))) return false;
-
-		/*
-		 * there is a thick in "reserve(_current.position + length + 1)",
-		 * adding a extra byte, then _current.remaining will never be zero
-		 * either writing or reading.
-		 */
+				(_usable < (_current.position + length + 1) &&
+						!reserve(_current.position + length)))) {
+			return false;
+		}
 
 		if (LIKELY(length < _current.remaining)) {
 			// speed up
@@ -597,6 +579,12 @@ public:
 
 	inline bool reserve(size_t size)
 	{
+		/*
+		 * there is a thick in "++size",
+		 * adding a extra byte, then _current.remaining will never be zero
+		 * either writing or reading.
+		 */
+		++size;
 		while (UNLIKELY(_usable < size)) {
 			buffer_block* node = alloc_node();
 			if (UNLIKELY(node == NULL)) return false;
@@ -638,7 +626,7 @@ private:
 	_linked_list<buffer_block> _buf_list;
 };
 
-#undef SWAP_BYTE
+#undef __SWAP_BYTE
 
 
 }
