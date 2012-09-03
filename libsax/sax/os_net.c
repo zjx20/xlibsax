@@ -79,11 +79,6 @@ int g_tcp_read(int fd, void *buf, size_t count)
 	return recv(fd, (char *) buf, count, 0);
 }
 
-int g_non_block_delayed(int got)
-{
-	return (got == -1 && WSAGetLastError() == WSAEWOULDBLOCK);
-}
-
 static int inet_aton(const char *addr, struct in_addr *inn)
 {
 	unsigned long t = inet_addr(addr);
@@ -147,10 +142,6 @@ int g_tcp_read(int fd, void *buf, size_t count)
 	return read(fd, buf, count);
 }
 
-int g_non_block_delayed(int got)
-{
-	return (got == -1 && (errno == EAGAIN || errno == EINTR));
-}
 #endif
 
 //-------------------------------------------------------------------------
@@ -191,6 +182,15 @@ uint16_t g_ntohs(uint16_t netshort)
 	return ntohs(netshort);
 }
 
+int g_set_linger(int fd, int onoff, int linger)
+{
+	struct linger lin = {0};
+	lin.l_onoff  = onoff;
+	lin.l_linger = linger;
+	return setsockopt(fd, SOL_SOCKET, SO_LINGER,
+			(const char*) &lin, sizeof(lin));
+}
+
 int g_tcp_listen(const char *addr, int port, int backlog)
 {
 	int ts, on = 1;
@@ -222,7 +222,6 @@ int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h)
 {
 	do {
 		struct sockaddr_in sa;
-		struct linger lin={0};
 		socklen_t saLen = sizeof(sa);
 		int on = 1, fd;
 		fd = accept(ts, (struct sockaddr*)&sa, &saLen);
@@ -232,11 +231,6 @@ int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h)
 #endif
 			return -1;
 		}
-//		// set linger, avoid TIME_WAIT state
-//		lin.l_onoff=1;
-//		lin.l_linger=0;
-//		setsockopt(fd, SOL_SOCKET, SO_LINGER,
-//			(const char *) &lin, sizeof(lin));
 		
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, 
 			(const char *) &on, sizeof(on));
@@ -253,17 +247,10 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 {
 	int fd, on = 1;
 	struct sockaddr_in sa;
-	struct linger lin={0};
 
 	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		return -1;
 	}
-
-//	// set linger, avoid TIME_WAIT state
-//	lin.l_onoff=1;
-//	lin.l_linger=0;
-//	if (setsockopt(fd, SOL_SOCKET, SO_LINGER,
-//		(const char *) &lin, sizeof(lin)) == -1) goto quit;
 
 	if (non_block && g_set_non_block(fd) != 0) goto quit;
 

@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 	if (trans.init(10000, handler)) {
 		printf("transport inited.\n");
 		sax::transport::id tid;
-		if (trans.listen(NULL, 6543, 100, tid)) {
+		if (trans.listen(NULL, 6543, 511, tid)) {
 			if (thread_num > 1) {
 				for (int i=1;i<thread_num;i++) {
 					sax::transport* trans_clone = new sax::transport();

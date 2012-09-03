@@ -64,8 +64,8 @@ private:
 		uint16_t port_h;
 		uint32_t ip_n;
 		id       tid;
-		buffer   read_buf;
-		buffer   write_buf;
+		buffer*  read_buf;
+		buffer*  write_buf;
 	};
 
 public:
