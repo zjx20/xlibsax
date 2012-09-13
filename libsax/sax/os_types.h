@@ -70,21 +70,43 @@ or just ignore it if you sure what you are doing."
 
 
 #if defined(__cplusplus) || defined(c_plusplus)
-
 template <typename T, size_t N>
 char (&ArraySizeHelper(const T (&array)[N]))[N];	// declaring a function that returning a array
-#define ARRAY_SIZE(array) (sizeof(ArraySizeHelper(array)))
-
+# define ARRAY_SIZE(array) (sizeof(ArraySizeHelper(array)))
 #else
-
 //#warning "ARRAY_SIZE() is unsafe in c, use it on your own risk."
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-
+# define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 #endif//ARRAY_SIZE
 
 #ifndef MAKE_UQUAD
 #define MAKE_UQUAD(hi, lo) \
 	(((uint64_t)((uint32_t)(hi)) << 32) | (uint32_t)(lo))
 #endif//MAKE_UQUAD
+
+#if defined(__GNUC__) && defined(__GLIBC__)
+# include <byteswap.h>
+#else
+# ifndef bswap_16
+# define bswap_16(x) ((uint16_t) ((((x) >> 8) & 0xff) | (((x) & 0xff) << 8)))
+# endif//bswap_16
+# ifndef bswap_32
+# define bswap_32(x) \
+		((((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) |		      \
+		 (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
+# endif//bswap_32
+# ifndef bswap_64
+# define bswap_64(x) \
+      ( (((x) & 0xff00000000000000ull) >> 56) \
+      | (((x) & 0x00ff000000000000ull) >> 40) \
+      | (((x) & 0x0000ff0000000000ull) >> 24) \
+      | (((x) & 0x000000ff00000000ull) >> 8)  \
+      | (((x) & 0x00000000ff000000ull) << 8)  \
+      | (((x) & 0x0000000000ff0000ull) << 24) \
+      | (((x) & 0x000000000000ff00ull) << 40) \
+      | (((x) & 0x00000000000000ffull) << 56) )
+# endif//bswap_64
+#endif
+
+
 
 #endif//__OS_TYPES_H_2010__

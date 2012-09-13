@@ -18,11 +18,7 @@
 #include "sax/compiler.h"
 #include "sax/os_api.h"
 
-#undef __SWAP_BYTE
-#define __SWAP_BYTE(a, p1, p2) a[p1] ^= a[p2]; a[p2] ^= a[p1]; a[p1] ^= a[p2]
-
 namespace sax {
-
 
 template <typename T>
 class _linked_list
@@ -137,6 +133,7 @@ class buffer
 public:
 	buffer() throw (std::bad_alloc)
 	{
+		assert(g_shm_unit() > offsetof(buffer::buffer_block, buf));
 		_block_size = g_shm_unit() - offsetof(buffer::buffer_block, buf);
 
 		buffer_block* first = alloc_node();
@@ -325,38 +322,58 @@ public:
 
 	inline bool get(uint16_t& num, bool bigendian = false)
 	{
-		uint8_t buf[sizeof(num)];
-		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
+		union bytes
+		{
+			uint16_t num_type;
+			uint8_t buf[sizeof(num_type)];
+		} b;
+
+		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 1);
+			num = (uint16_t)bswap_16(b.num_type);
 		}
-		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
+		else {
+			num = b.num_type;
+		}
+
 		return true;
 	}
 
 	inline bool get(uint32_t& num, bool bigendian = false)
 	{
-		uint8_t buf[sizeof(num)];
-		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
+		union bytes
+		{
+			uint32_t num_type;
+			uint8_t buf[sizeof(num_type)];
+		} b;
+
+		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 3);
-			__SWAP_BYTE(buf, 1, 2);
+			num = (uint32_t)bswap_32(b.num_type);
 		}
-		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
+		else {
+			num = b.num_type;
+		}
+
 		return true;
 	}
 
 	inline bool get(uint64_t& num, bool bigendian = false)
 	{
-		uint8_t buf[sizeof(num)];
-		if (UNLIKELY(!get(buf, sizeof(buf)))) return false;
+		union bytes
+		{
+			uint64_t num_type;
+			uint8_t buf[sizeof(num_type)];
+		} b;
+
+		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 7);
-			__SWAP_BYTE(buf, 1, 6);
-			__SWAP_BYTE(buf, 2, 5);
-			__SWAP_BYTE(buf, 3, 4);
+			num = (uint64_t)bswap_64(b.num_type);
 		}
-		memcpy(&num, buf, sizeof(buf));	// avoid strict aliasing bug
+		else {
+			num = b.num_type;
+		}
+
 		return true;
 	}
 
@@ -461,33 +478,29 @@ public:
 
 	inline bool put(uint16_t num, bool bigendian = false)
 	{
-		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 1);
+			num = (uint16_t)bswap_16(num);
 		}
-		return put(buf, 2);
+
+		return put((uint8_t*)&num, 2);
 	}
 
 	inline bool put(uint32_t num, bool bigendian = false)
 	{
-		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 3);
-			__SWAP_BYTE(buf, 1, 2);
+			num = (uint32_t)bswap_32(num);
 		}
-		return put(buf, 4);
+
+		return put((uint8_t*)&num, 4);
 	}
 
 	inline bool put(uint64_t num, bool bigendian = false)
 	{
-		uint8_t* buf = reinterpret_cast<uint8_t*>(&num);
 		if (bigendian ^ !IS_LITTLE_ENDIAN) {
-			__SWAP_BYTE(buf, 0, 7);
-			__SWAP_BYTE(buf, 1, 6);
-			__SWAP_BYTE(buf, 2, 5);
-			__SWAP_BYTE(buf, 3, 4);
+			num = (uint64_t)bswap_64(num);
 		}
-		return put(buf, 8);
+
+		return put((uint8_t*)&num, 8);
 	}
 
 	inline bool put(uint8_t buf[], size_t length)
@@ -623,9 +636,6 @@ private:
 
 	_linked_list<buffer_block> _buf_list;
 };
-
-#undef __SWAP_BYTE
-
 
 }
 

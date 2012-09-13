@@ -46,7 +46,7 @@ endif
 ifdef WINDIR
 LIB = -lws2_32
 else
-CCFLAGS += -fPIC -DHAVE_EPOLL
+CCFLAGS += -DHAVE_EPOLL
 endif
 
 CXXFLAGS = $(CCFLAGS) -D__cplusplus 
@@ -59,9 +59,10 @@ $(TARGET): $(OBJS)
 	@$(AR) $(ARFLAGS) $(TARGET) $(OBJS)
 	@$(RANLIB) $(TARGET)
 
-shared: $(OBJS)
-	@echo Achiving shared library
-	@$(CXX) -shared -o $(patsubst %.a,%.so,$(TARGET)) $(OBJS) $(LIB)
+# need -fPIC option
+#shared: $(OBJS)
+#	@echo Achiving shared library
+#	@$(CXX) -shared -o $(patsubst %.a,%.so,$(TARGET)) $(OBJS) $(LIB)
 
 clean: 
 	@echo Removing object files
