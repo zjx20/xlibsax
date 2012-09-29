@@ -31,9 +31,13 @@ void __sax_memory_barrier(int, ...);
 #define UNUSED_PARAMETER(x) (void)(x)
 #endif//UNUSED_PARAMETER
 
+#define MACRO_TOSTR(x) #x
+#define MACRO_CAT(a, b) a##b
+// macro expanded cat
+#define MACRO_ECAT(a, b) MACRO_CAT(a, b)
 
 //STATIC_ASSERT
-#if SUPPORT_STATIC_ASSERT
+#if defined(SUPPORT_STATIC_ASSERT)
 #define STATIC_ASSERT(expr, msg) static_assert(expr, #msg)
 #elif defined(__cplusplus) || defined(c_plusplus)
 
@@ -45,11 +49,14 @@ class __static_assert_helper<true> {};
 
 #define STATIC_ASSERT(expr, msg) \
 	typedef struct \
-	{ __static_assert_helper<bool(expr)> _static_assert_error__##msg[bool(expr)?1:-1]; } \
-	compile_error##__LINE__##msg;
+	{ __static_assert_helper<(const bool)(expr)> \
+	_static_assert_error__##msg[bool(expr)?1:-1]; } \
+	MACRO_ECAT(MACRO_ECAT(compile_error_, __LINE__), _##msg)
 
 #else
-#define STATIC_ASSERT(expr, msg) typedef struct {char _static_assert_error__##msg[(expr)?1:-1];} compile_error##__LINE__##msg;
+#define STATIC_ASSERT(expr, msg) \
+	typedef struct {char _static_assert_error__##msg[(expr)?1:-1];} \
+	MACRO_ECAT(MACRO_ECAT(compile_error_, __LINE__), _##msg)
 #endif//STATIC_ASSERT
 
 
@@ -61,7 +68,21 @@ class __static_assert_helper<true> {};
 #warning "NOINLINE is unavailable."
 #endif
 
+// thread_local
+#if defined(SUPPORT_THREAD_LOCAL)
+// do nothing
+#elif defined(__GNUC__)
+#define thread_local __thread
+#elif defined(_MSC_VER)
+#define thread_local __declspec(thread)
+#else
+#warning "thread_local is unavailable."
+#endif // thread_local
+
 #if defined(__cplusplus) || defined(c_plusplus)
+
+namespace sax {
+
 // Use this to get around strict aliasing rules.
 // For example, uint64_t i = bitwise_cast<uint64_t>(returns_double());
 // The most obvious implementation is to just cast a pointer,
@@ -100,6 +121,9 @@ static inline To bitwise_cast(From from) {
 	u.f = from;
 	return u.t;
 }
+
+} // namespace sax
+
 #endif
 
 #endif /* COMPILER_H_ */

@@ -348,10 +348,11 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 	}
 
 	buffer* write_buf = _ctx[tid.fd].write_buf;
-	if (UNLIKELY(!write_buf->reserve(write_buf->position() + length))) {
-		// no memory for writing
-		return false;
-	}
+	// FIXME: the following code is commented for compile...
+//	if (UNLIKELY(!write_buf->reserve(write_buf->position() + length))) {
+//		// no memory for writing
+//		return false;
+//	}
 
 	if (write_buf->position() == 0) {
 		// send it directly, do not wait for eda_poll()
@@ -402,10 +403,11 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 	// TODO: eliminate data copying
 	char temp[1024];
 	while (remaining > 0) {
-		if (UNLIKELY(!buf->reserve(buf->position() + sizeof(temp)))) {
-			// no memory for receiving
-			break;
-		}
+		// FIXME: the following code is commented for compile...
+//		if (UNLIKELY(!buf->reserve(buf->position() + sizeof(temp)))) {
+//			// no memory for receiving
+//			break;
+//		}
 		int ret = g_tcp_read(fd, temp, sizeof(temp));
 		if (LIKELY(ret > 0)) {
 			buf->put((uint8_t*) temp, ret);

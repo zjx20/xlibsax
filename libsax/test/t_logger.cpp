@@ -14,6 +14,7 @@ TEST(static_checker_helper, basic_test)
 	using namespace sax::logger;
 	size_t is_static_size = sizeof(static_checker_helper<true>);
 
+	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << true << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << 'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (uint8_t)'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (int16_t)'a' << static_checker()));
@@ -22,6 +23,7 @@ TEST(static_checker_helper, basic_test)
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (uint32_t)'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (int64_t)'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (uint64_t)'a' << static_checker()));
+	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << &is_static_size << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (float)'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (double)'a' << static_checker()));
 	ASSERT_EQ(is_static_size, sizeof(static_log_size_helper<0>() << (long double)'a' << static_checker()));
@@ -64,6 +66,9 @@ TEST(static_log_size_helper, basic_test)
 {
 	using namespace sax::logger;
 
+	void* pointer = (void*) 0x12345678;
+
+	ASSERT_EQ(estimated_size::BOOL, sizeof((static_log_size_helper<0>() << true << log_size_traits())));
 	ASSERT_EQ(estimated_size::CHAR, sizeof((static_log_size_helper<0>() << 'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::UINT8, sizeof((static_log_size_helper<0>() << (uint8_t)'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::INT16, sizeof((static_log_size_helper<0>() << (int16_t)'a' << log_size_traits())));
@@ -72,6 +77,7 @@ TEST(static_log_size_helper, basic_test)
 	ASSERT_EQ(estimated_size::UINT32, sizeof((static_log_size_helper<0>() << (uint32_t)'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::INT64, sizeof((static_log_size_helper<0>() << (int64_t)'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::UINT64, sizeof((static_log_size_helper<0>() << (uint64_t)'a' << log_size_traits())));
+	ASSERT_EQ(estimated_size::POINTER, sizeof((static_log_size_helper<0>() << pointer << log_size_traits())));
 	ASSERT_EQ(estimated_size::FLOAT, sizeof((static_log_size_helper<0>() << (float)'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::DOUBLE, sizeof((static_log_size_helper<0>() << (double)'a' << log_size_traits())));
 	ASSERT_EQ(estimated_size::LONGDOUBLE, sizeof((static_log_size_helper<0>() << (long double)'a' << log_size_traits())));
@@ -96,6 +102,10 @@ TEST(static_log_size_helper, basic_test)
 TEST(dynamic_log_size_helper, basic_test)
 {
 	using namespace sax::logger;
+
+	void* pointer = (void*) 0x12345678;
+
+	ASSERT_EQ(estimated_size::BOOL, (dynamic_log_size_helper<0>() << true << log_size_traits()));
 	ASSERT_EQ(estimated_size::CHAR, (dynamic_log_size_helper<0>() << 'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::UINT8, (dynamic_log_size_helper<0>() << (uint8_t)'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::INT16, (dynamic_log_size_helper<0>() << (int16_t)'a' << log_size_traits()));
@@ -104,6 +114,7 @@ TEST(dynamic_log_size_helper, basic_test)
 	ASSERT_EQ(estimated_size::UINT32, (dynamic_log_size_helper<0>() << (uint32_t)'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::INT64, (dynamic_log_size_helper<0>() << (int64_t)'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::UINT64, (dynamic_log_size_helper<0>() << (uint64_t)'a' << log_size_traits()));
+	ASSERT_EQ(estimated_size::POINTER, (dynamic_log_size_helper<0>() << pointer << log_size_traits()));
 	ASSERT_EQ(estimated_size::FLOAT, (dynamic_log_size_helper<0>() << (float)'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::DOUBLE, (dynamic_log_size_helper<0>() << (double)'a' << log_size_traits()));
 	ASSERT_EQ(estimated_size::LONGDOUBLE, (dynamic_log_size_helper<0>() << (long double)'a' << log_size_traits()));
@@ -125,20 +136,55 @@ TEST(dynamic_log_size_helper, basic_test)
 	ASSERT_EQ(16, dynamic_log_size_helper<0>() << std::string("rvalue something") << log_size_traits());
 }
 
+TEST(log_size_traits, float_point_number_size)
+{
+	using namespace sax::logger;
+	char buf[100];
+
+	sprintf(buf, "%d %d", FLT_MIN_10_EXP, FLT_MAX_10_EXP);
+	EXPECT_EQ(strlen(buf)/2 + 9 + 1, estimated_size::FLOAT);
+
+	sprintf(buf, "%d %d", DBL_MIN_10_EXP, DBL_MAX_10_EXP);
+	EXPECT_EQ(strlen(buf)/2 + 9 + 1, estimated_size::DOUBLE);
+
+	sprintf(buf, "%d %d", LDBL_MIN_10_EXP, LDBL_MAX_10_EXP);
+	EXPECT_EQ(strlen(buf)/2 + 9 + 1, estimated_size::LONGDOUBLE);
+}
+
+TEST(log_size_trais, util)
+{
+	using namespace sax::logger::util;
+	EXPECT_EQ(1, (number_digits_traits<0, 10>::VALUE));
+	EXPECT_EQ(1, (number_digits_traits<5, 10>::VALUE));
+	EXPECT_EQ(2, (number_digits_traits<13, 10>::VALUE));
+	EXPECT_EQ(3, (number_digits_traits<266, 10>::VALUE));
+	EXPECT_EQ(4, (number_digits_traits<4578, 10>::VALUE));
+	EXPECT_EQ(5, (number_digits_traits<10000, 10>::VALUE));
+	EXPECT_EQ(6, (number_digits_traits<789456, 10>::VALUE));
+
+	EXPECT_EQ(2, (number_digits_traits<-5, 10>::VALUE));
+	EXPECT_EQ(3, (number_digits_traits<-13, 10>::VALUE));
+	EXPECT_EQ(4, (number_digits_traits<-266, 10>::VALUE));
+	EXPECT_EQ(5, (number_digits_traits<-4578, 10>::VALUE));
+	EXPECT_EQ(6, (number_digits_traits<-10000, 10>::VALUE));
+	EXPECT_EQ(7, (number_digits_traits<-789456, 10>::VALUE));
+}
+
 TEST(log_size_traits, combine)
 {
 	using namespace sax::logger;
 
-	ASSERT_EQ(5 + 1 + 11 + 14, sizeof(log_size_helper() <<
-			"a = " << 'a' << 123 << 23234.3242354 << log_size_traits()));
-
 	const char* char_pointer = "char";
+	void* pointer = (void*) 0x12345678;
+	ASSERT_EQ(5 + 1 + 11 + 14 + 18, sizeof(log_size_helper() <<
+			"a = " << 'a' << 123 << 23234.3242354 << pointer << log_size_traits()));
 
-	ASSERT_EQ(5 + 4 + 1 + 11 + 14, (log_size_helper() <<
-			"a = " << char_pointer << 'a' << 123 << 23234.3242354 << log_size_traits()));
+	ASSERT_EQ(5 + 4 + 1 + 11 + 14 + 18, (log_size_helper() <<
+			"a = " << char_pointer << 'a' << 123 << 23234.3242354 << pointer << log_size_traits()));
 
-	ASSERT_EQ(5 + 11 + 1 + 11 + 14, (log_size_helper() <<
-			"a = " << std::string("std::string") << 'a' << 123 << 23234.3242354 << log_size_traits()));
+	ASSERT_EQ(5 + 11 + 1 + 11 + 14 + 18, (log_size_helper() <<
+			"a = " << std::string("std::string") << 'a' << 123 << 23234.3242354 <<
+			pointer << log_size_traits()));
 }
 
 size_t get_file_size(const std::string& file)
@@ -281,12 +327,12 @@ TEST(log, basic_test)
 			new sax::logger::log_file_writer<sax::mutex_type>(
 					"stdout", 100, 100, sax::logger::SAX_TRACE);
 
-	LOG_TRACE(logger, "hello logger!" << 1);
-	LOG_TRACE(logger, "TRACE level!" << 2);
-	LOG_DEBUG(logger, "DEBUG level!" << 3);
-	LOG_INFO(logger, "INFO level!" << 4);
-	LOG_WARN(logger, "WARN level!" << 5);
-	LOG_ERROR(logger, "ERROR level!" << 6);
+	LOGP_TRACE(logger, "hello logger!" << 1);
+	LOGP_TRACE(logger, "TRACE level!" << 2);
+	LOGP_DEBUG(logger, "DEBUG level!" << 3);
+	LOGP_INFO(logger, "INFO level!" << 4);
+	LOGP_WARN(logger, "WARN level!" << 5);
+	LOGP_ERROR(logger, "ERROR level!" << 6);
 
 	delete logger;
 }
@@ -297,12 +343,12 @@ TEST(log, log_level)
 			new sax::logger::log_file_writer<sax::mutex_type>(
 					"stdout", 100, 100, sax::logger::SAX_INFO);
 
-	LOG_TRACE(logger, "hello logger!" << 1);
-	LOG_TRACE(logger, "TRACE level!" << 2);
-	LOG_DEBUG(logger, "DEBUG level!" << 3);
-	LOG_INFO(logger, "INFO level!" << 4);
-	LOG_WARN(logger, "WARN level!" << 5);
-	LOG_ERROR(logger, "ERROR level!" << 6);
+	LOGP_TRACE(logger, "hello logger!" << 1);
+	LOGP_TRACE(logger, "TRACE level!" << 2);
+	LOGP_DEBUG(logger, "DEBUG level!" << 3);
+	LOGP_INFO(logger, "INFO level!" << 4);
+	LOGP_WARN(logger, "WARN level!" << 5);
+	LOGP_ERROR(logger, "ERROR level!" << 6);
 
 	delete logger;
 }
@@ -315,7 +361,7 @@ TEST(log, large_log)
 			new sax::logger::log_file_writer<sax::mutex_type>(
 					"stdout", 100, 100, sax::logger::SAX_TRACE);
 
-	LOG_TRACE(logger, "large log " << large);
+	LOGP_TRACE(logger, "large log " << large);
 
 	delete logger;
 }

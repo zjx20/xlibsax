@@ -8,30 +8,32 @@
 #include "sax/logger/logger.h"
 
 #if !defined(LOGGING_ASYNC)
-sax::logger::log_file_writer<sax::mutex_type>* logger =
-		new sax::logger::log_file_writer<sax::mutex_type>(
+sax::logger::log_file_writer<sax::spin_type>* logger =
+		new sax::logger::log_file_writer<sax::spin_type>(
 				"t_logger_benchmark.txt", 10, 100 * 1024 * 1024, sax::logger::SAX_TRACE);
 #else
 sax::stage* logger = sax::stage_creator<sax::logger::log_handler>::create_stage(
 		"logging", 1, NULL, 10*1024*1024, new sax::single_dispatcher());
 #endif
 
+volatile bool finished = false;
+
 void* log(void* param)
 {
 	size_t& counter = *(size_t*) param;
 
-	while (1) {
+	while (!finished) {
 		int choose = rand() % 5;
 		switch(choose)
 		{
 		case 0:
 		{
-			LOGP_TRACE(logger, "fasdfjkawue" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_TRACE(logger, "fasdfjkawue " << 0 << 34879204 << ' ' << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 1:
 		{
-			LOGP_DEBUG(logger, "fasdfjkawuesdfadfjakl;" << 34879204 << 123.764646 << ' ' << counter);
+			LOGP_DEBUG(logger, "fasdfjkawuesdfadfjakl; " << (int32_t) (1<<31) << ' ' << 34879204 << 123.764646 << ' ' << counter);
 			break;
 		}
 		case 2:
@@ -59,10 +61,11 @@ void* log(void* param)
 
 int main()
 {
-	const int threads = 2;
+	const int threads = 8;
 	volatile size_t counter[threads] = {0};
+	g_thread_t handles[threads];
 	for (int i=0; i<threads; i++) {
-		g_thread_start(log, (void*) &counter[i]);
+		handles[i] = g_thread_start(log, (void*) &counter[i]);
 	}
 
 	size_t last_sum = 0;
@@ -74,8 +77,16 @@ int main()
 		printf("%lu %lu\n", sum, sum - last_sum);
 		last_sum = sum;
 		g_thread_sleep(1.0);
-		if (sum > 1000000) break;
+		if (sum > 5000000) break;
 	}
+
+	finished = true;
+
+	for (int i=0; i<threads; i++) {
+		g_thread_join(handles[i], NULL);
+	}
+
+	delete logger;
 
 //	tm t;
 //

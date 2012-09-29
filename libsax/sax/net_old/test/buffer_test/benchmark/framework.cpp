@@ -24,6 +24,9 @@
 #include "old/buffer.h"
 #include "old/t_buffer_transport.h"
 
+#include "new_array/buffer.h"
+#include "new_array/t_buffer_transport.h"
+
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
@@ -489,6 +492,24 @@ void test6()
 		clock_t end = clock();
 
 		printf("test6: old buffer use %lfs\n", (end - start) * 1.0 / CLOCKS_PER_SEC);
+	}
+
+	//if(0)
+	{
+		boost::shared_ptr<sax::array::TBufferTransport> transport(new sax::array::TBufferTransport());
+		boost::shared_ptr<TBinaryProtocol> protocol(new TBinaryProtocol(transport));
+
+		sax::array::buffer buf;
+		buf.skip(134 * 1000000);
+		buf.reset();
+
+		transport->set_buffer(&buf, false);
+
+		clock_t start = clock();
+		do_bench2<sax::array::TBufferTransport, sax::array::buffer>(protocol.get(), transport.get());
+		clock_t end = clock();
+
+		printf("test6: new array buffer use %lfs\n", (end - start) * 1.0 / CLOCKS_PER_SEC);
 	}
 }
 

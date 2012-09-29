@@ -10,65 +10,12 @@
 
 using namespace sax;
 
-struct A {
-	A* next;
-	A* prev;
-	int a;
-};
-
-const int32_t BLOCK_HEADER_SIZE = 8;
-const int32_t BLOCK_SIZE = g_shm_unit() - BLOCK_HEADER_SIZE;
-
-TEST(linked_list, push_pop)
-{
-	A arr[100];
-
-	for(size_t i=0;i<ARRAY_SIZE(arr);i++) {
-		arr[i].a = i;
-	}
-
-	_linked_list<A> l;
-
-	EXPECT_EQ(NULL, l.get_head());
-	EXPECT_EQ(NULL, l.pop_front());
-
-	l.push_back(&arr[0]);
-
-	EXPECT_EQ(&arr[0], l.get_head());
-	EXPECT_EQ(&arr[0], l.pop_front());
-
-	for(size_t i=0;i<ARRAY_SIZE(arr);i++) {
-		l.push_back(&arr[i]);
-	}
-
-	for(size_t i=0;i<ARRAY_SIZE(arr);i++) {
-		A* tmp = l.pop_front();
-		EXPECT_EQ(i, tmp->a);
-	}
-
-	////////////////////////////////////////
-
-	for(size_t i=0;i<ARRAY_SIZE(arr);i++) {
-		l.push_back(&arr[i]);
-	}
-
-	for(size_t i=0;i<10;i++) {
-		l.pop_front();
-	}
-
-	A* h = l.get_head();
-	int cc = 0;
-	while(h != NULL) {
-		cc++;
-		h = h->next;
-	}
-	EXPECT_EQ(cc, 90);
-}
+const uint32_t BLOCK_HEADER_SIZE = 0;
+const uint32_t BLOCK_SIZE = g_shm_unit() - BLOCK_HEADER_SIZE;
 
 TEST(buffer, empty)
 {
 	buffer buf;
-	buffer buf2;
 
 	uint8_t tmp[100];
 
@@ -77,12 +24,12 @@ TEST(buffer, empty)
 
 	EXPECT_TRUE(buf.flip());
 	EXPECT_TRUE(buf.get(tmp, 0));
-	EXPECT_TRUE(buf.get(buf2));
-
 	EXPECT_TRUE(buf.compact());
-	EXPECT_TRUE(buf2.flip());
+
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.remaining());
+	EXPECT_EQ(0, buf.data_length());
+
 	EXPECT_TRUE(buf.put(tmp, 0));
-	EXPECT_TRUE(buf.put(buf2));
 	EXPECT_TRUE(buf.flip());
 
 	EXPECT_FALSE(buf.get(tmp, 1));
@@ -91,7 +38,7 @@ TEST(buffer, empty)
 	EXPECT_EQ(0, buf.position());
 
 	EXPECT_EQ(0, buf.remaining());
-	EXPECT_EQ((size_t)-1, buf.data_length());
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.data_length());
 
 	EXPECT_FALSE(buf.peek(tmp[0]));
 }
@@ -112,7 +59,7 @@ TEST(buffer, writing_mode)
 
 	EXPECT_EQ(strlen(str) * 2, buf.data_length());
 
-	EXPECT_EQ(size_t(-1), buf.remaining());
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.remaining());
 
 	EXPECT_TRUE(buf.flip());
 
@@ -128,7 +75,7 @@ TEST(buffer, writing_mode)
 	EXPECT_TRUE(buf.skip(BLOCK_SIZE));
 	EXPECT_EQ(BLOCK_SIZE, buf.position());
 	EXPECT_TRUE(buf.compact());
-	EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
+	EXPECT_EQ(3 * BLOCK_SIZE, buf.capacity());	// no shrink
 }
 
 TEST(buffer, reading_mode)
@@ -151,7 +98,7 @@ TEST(buffer, reading_mode)
 	EXPECT_EQ(0, memcmp(tmp, str, 4));
 
 	EXPECT_EQ(strlen(str) - 4, buf.remaining());
-	EXPECT_EQ(size_t(-1), buf.data_length());
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.data_length());
 
 	EXPECT_TRUE(buf.compact());
 	EXPECT_FALSE(buf.compact());
@@ -163,75 +110,6 @@ TEST(buffer, reading_mode)
 	EXPECT_EQ(0, buf.position());
 	EXPECT_TRUE(buf.get(tmp, strlen(str) - 4 + 8));
 	EXPECT_EQ(0, memcmp(tmp, " is a test string.have fun", strlen(str) - 4 + 8));
-}
-
-TEST(buffer, put_get_buffer)
-{
-	buffer buf1;
-	buffer buf2;
-
-	const char* str1 = "a testing string";
-	const char* str2 = "string2";
-
-	uint8_t tmp[100];
-
-	EXPECT_TRUE(buf2.put(&tmp[0], 1));
-	EXPECT_TRUE(buf2.put((uint8_t*)str2, strlen(str2)));
-	EXPECT_TRUE(buf2.flip());
-
-	EXPECT_TRUE(buf2.get(tmp, 1));
-	EXPECT_TRUE(buf2.compact());
-	EXPECT_TRUE(buf2.flip());
-
-	EXPECT_TRUE(buf1.put((uint8_t*)str1, strlen(str1)));
-	EXPECT_TRUE(buf1.put(buf2, 3));
-
-	EXPECT_EQ(strlen(str1) + 3, buf1.position());
-	EXPECT_EQ(3, buf2.position());
-
-	EXPECT_TRUE(buf1.flip());
-
-	buf1.mark();
-	EXPECT_TRUE(buf1.get(tmp, strlen(str1) + 3));
-
-	EXPECT_EQ(std::string("a testing stringstr"), std::string((char*)tmp, strlen(str1) + 3));
-
-	EXPECT_TRUE(buf1.reset());
-	EXPECT_EQ(0, buf1.position());
-
-	EXPECT_TRUE(buf2.compact());
-	EXPECT_EQ(strlen(str2) - 3, buf2.position());
-	EXPECT_TRUE(buf1.get(buf2));
-	EXPECT_EQ(strlen(str1) + strlen(str2), buf2.position());
-	EXPECT_TRUE(buf2.flip());
-	EXPECT_TRUE(buf2.get(tmp, strlen(str1) + strlen(str2)));
-
-	EXPECT_EQ(std::string("ing2a testing stringstr"), std::string((char*)tmp, strlen(str1) + strlen(str2)));
-
-	EXPECT_TRUE(buf1.compact());
-	EXPECT_TRUE(buf2.compact());
-
-	// get with a reading buffer
-	EXPECT_TRUE(buf1.put((uint8_t*)str1, strlen(str1)));
-	EXPECT_TRUE(buf1.flip());
-	EXPECT_TRUE(buf2.put((uint8_t*)str2, strlen(str2)));
-	EXPECT_TRUE(buf2.flip());
-	EXPECT_FALSE(buf2.get(buf1));
-
-	// put with a writing buffer
-	EXPECT_TRUE(buf1.compact());
-	EXPECT_TRUE(buf2.compact());
-	EXPECT_FALSE(buf2.put(buf1));
-
-	// reading buffer put a buffer
-	EXPECT_TRUE(buf1.flip());
-	EXPECT_TRUE(buf2.flip());
-	EXPECT_FALSE(buf1.put(buf2));
-
-	// writing buffer get a buffer
-	EXPECT_TRUE(buf1.compact());
-	EXPECT_TRUE(buf2.compact());
-	EXPECT_FALSE(buf1.get(buf2));
 }
 
 TEST(buffer, seeking)	// skip rewind
@@ -327,9 +205,9 @@ TEST(buffer, clear)
 
 	EXPECT_EQ(0, buf.position());
 	EXPECT_TRUE(buf.data_length() == 0);
-	EXPECT_TRUE(buf.remaining() == -1ul);
+	EXPECT_TRUE(buf.remaining() == buffer::INVALID_VALUE);
 
-	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
+	EXPECT_EQ(4 * BLOCK_SIZE, buf.capacity());	// no shrink
 }
 
 TEST(buffer, endianness)
@@ -445,8 +323,11 @@ TEST(buffer, memory_boundary)
 	EXPECT_TRUE(buf.skip(BLOCK_SIZE - 1));
 	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
 	EXPECT_TRUE(buf.put((uint8_t)'a'));
-	EXPECT_EQ(BLOCK_SIZE * 2, buf.capacity());
+	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
 	EXPECT_EQ(BLOCK_SIZE, buf.position());
+
+	EXPECT_TRUE(buf.put((uint8_t)'a'));
+	EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
 
 	EXPECT_TRUE(buf.flip());
 
@@ -455,20 +336,85 @@ TEST(buffer, memory_boundary)
 	EXPECT_TRUE(buf.get(tmp));
 	EXPECT_EQ((uint8_t)'a', tmp);
 	EXPECT_TRUE(buf.compact());
-	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
-	EXPECT_EQ(0, buf.position());
+	EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
+	EXPECT_EQ(1, buf.position());
 }
 
-TEST(buffer, reserve)
+TEST(buffer, limit)
 {
 	buffer buf;
-	buf.reserve(BLOCK_SIZE * 3 - 1);
-	EXPECT_EQ(3 * BLOCK_SIZE, buf.capacity());
-	buf.reserve(BLOCK_SIZE * 3);
-	EXPECT_EQ(4 * BLOCK_SIZE, buf.capacity());
-	buf.reserve(BLOCK_SIZE * 3 + 1);
-	EXPECT_EQ(4 * BLOCK_SIZE, buf.capacity());
-	EXPECT_EQ(0, buf.position());
+	char str[] = "0123456789 testing string";
+	ASSERT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+	ASSERT_TRUE(buf.flip());
+
+	ASSERT_EQ(strlen(str), buf.limit(10));
+
+	char tmp[100];
+	EXPECT_FALSE(buf.get((uint8_t*)tmp, strlen(str)));
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, 10));
+	EXPECT_EQ("0123456789", std::string(tmp, 10));
+
+	ASSERT_EQ(10, buf.limit(strlen(str)));
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, strlen(str)-10));
+	EXPECT_EQ(str + 10, std::string(tmp, strlen(str)-10));
+}
+
+TEST(buffer, expend)
+{
+	{
+		buffer buf;
+		EXPECT_EQ(BLOCK_SIZE, buf.capacity());
+		EXPECT_TRUE(buf.skip(BLOCK_SIZE + 1));
+		EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
+	}
+
+	{
+		buffer buf;
+		char tmp[200];
+		std::string res = "";
+
+		uint32_t total = 0;
+		while (total <= BLOCK_SIZE) {
+			sprintf(tmp, "%d", rand());
+			total += strlen(tmp);
+			res += tmp;
+			ASSERT_TRUE(buf.put((uint8_t*)tmp, strlen(tmp)));
+		}
+
+		ASSERT_TRUE(buf.flip());
+		EXPECT_EQ(res.size(), buf.remaining());
+
+		char str[2*BLOCK_SIZE];
+		EXPECT_TRUE(buf.get((uint8_t*)str, buf.remaining()));
+		EXPECT_EQ(res, std::string(str, res.size()));
+	}
+}
+
+TEST(buffer, moving)
+{
+	{
+		buffer buf;
+		char str[] = "f486gv48dhg7534h86sr4g56w7t5566877ty53j4878t6k1mh23dhj ilfjdlk flafjksdlvnz;vh";
+		buf.put((uint8_t*)str, strlen(str));
+		buf.flip();
+		char tmp[200];
+
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str, 10), std::string(tmp, 10));
+
+		buf.compact();
+		buf.flip();
+
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str+10, 10), std::string(tmp, 10));
+
+		buf.compact();
+		buf.flip();
+
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str+20, 10), std::string(tmp, 10));
+		EXPECT_EQ(strlen(str) - 30, buf.remaining());
+	}
 }
 
 

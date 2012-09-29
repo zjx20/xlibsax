@@ -129,10 +129,6 @@ private:
 
 		_curr_size = ftell(file);
 		_curr_logfile = file;
-
-		// TODO: add a function or option to do this
-		stdout = file;
-		stderr = file;
 	}
 
 	void close()

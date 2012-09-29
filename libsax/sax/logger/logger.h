@@ -16,120 +16,59 @@
 
 namespace sax {
 namespace logger {
+
+const int32_t MAX_LOG_SIZE = 8 * 1024;
+const int32_t LOG_TIME_LEN = sizeof("[20120822 11:34:27.456789]") - 1;
+const int32_t LOG_TID_LEN = sizeof("[12345]") - 1;	// 5 digits
+
+struct log_state
+{
+	int64_t last_hours;
+	int32_t last_minute;
+	char log_buf[MAX_LOG_SIZE];
+};
+
+extern thread_local log_state state;
+
 // only convert unix timestamp to date and time (the first 6 fields in struct tm)
 void fast_localtime(int64_t unix_sec, struct tm* st);
+
+void update_log_buf(int64_t timestamp_us, log_state& state);
+
 }
 }
 
 
-#undef __LOGGING_SYNC
-#if defined(LOGGING_SYNC)
-#define __LOGGING_SYNC 1
-#elif defined(LOGGING_ASYNC)
-#define __LOGGING_SYNC 0
-#include "log_stage.h"
-#else
-#define __LOGGING_SYNC 1
-#endif
-
-
-#if __LOGGING_SYNC
 #define __LOGGING_GET_LEVEL(logger) (logger)->get_log_level()
-#else
-#define __LOGGING_GET_LEVEL(logger) sax::logger::SAX_TRACE // TODO: fixme
-#endif
 
-
-#define __LOGGING_GET_LOG_SIZE(x, size) \
-	if (sizeof(log_size_helper() << x << static_checker()) == \
-			sizeof(static_checker_helper<true>)) \
-	{ size = sizeof(log_size_helper() << x << log_size_traits()); } \
-	else \
-	{ size = (size_t) (log_size_helper() << x << log_size_traits()); } \
-	++size; /*for '\n'*/ ++size /*for '\0'*/
-
-
-#define __LOGGING_LOG_SERIALIZE(x, buf, serializer_name) \
-	log_serializer serializer_name(buf); \
-	serializer_name << x << log_serializer_eol()
-
-#if __LOGGING_SYNC
-#define __LOGGING_LOG_SYNC(logger, x, buf) \
-	__LOGGING_LOG_SERIALIZE(x, buf, __sax_logging_serializer); \
-	logger->log(__sax_logging_serializer.data(), __sax_logging_serializer.length())
-
-#define __LOGGING_LOG_LARGE_LOG(logger, size, x) \
-	char* __sax_logging_buf = new char[size]; \
-	__LOGGING_LOG_SYNC(logger, x, __sax_logging_buf); \
-	delete[] __sax_logging_buf
-
-#define __LOGGING_LOG_DO(logger, size_level, x) \
-	char __sax_logging_buf[size_level]; \
-	__LOGGING_LOG_SYNC(logger, x, __sax_logging_buf)
-#else
-#define __LOGGING_LOG_LARGE_LOG(logger, size, x) // TODO: fixme
-#define __LOGGING_LOG_DO(logger, size_level, x) \
-	sax::log_event##size_level* ev = logger->allocate_event<sax::log_event##size_level>(); \
-	__LOGGING_LOG_SERIALIZE(x, ev->body, serializer); \
-	logger->push_event(ev)
-#endif
-
-#define __LOGGING_LOG(logger, x) \
-	size_t size; \
-	__LOGGING_GET_LOG_SIZE(x, size); \
-	if (UNLIKELY(size > 8192)) { \
-		__LOGGING_LOG_LARGE_LOG(logger, size, x); \
-	} else { \
-		if (LIKELY(size <= 1024)) { \
-			if (LIKELY(size <= 256)) { \
-				if (LIKELY(size <= 128)) { \
-					__LOGGING_LOG_DO(logger, 128, x); \
-				} else { \
-					__LOGGING_LOG_DO(logger, 256, x); \
-				} \
-			} else { \
-				if (size <= 512) { \
-					__LOGGING_LOG_DO(logger, 512, x); \
-				} else { \
-					__LOGGING_LOG_DO(logger, 1024, x); \
-				} \
-			} \
-		} else { \
-			if (size <= 4096) { \
-				if (size <= 2048) { \
-					__LOGGING_LOG_DO(logger, 2048, x); \
-				} else { \
-					__LOGGING_LOG_DO(logger, 4096, x); \
-				} \
-			} else { \
-				__LOGGING_LOG_DO(logger, 8192, x); \
-			} \
-		} \
-	}
-
-
-#define LOGGING_SCOPE(logger_, level) \
-	if (__LOGGING_GET_LEVEL(logger_) <= sax::logger::level)
+#define LOGGING_SCOPE(__logger, level) \
+	if (__LOGGING_GET_LEVEL(__logger) <= sax::logger::level)
 
 #ifdef LOG_OFF
 #define __LOG_BASE(logger_, x, level, file, line_num)
 #else
-#define __LOG_BASE(logger_, x, level, file, line_num) \
-	LOGGING_SCOPE(logger_, level) { \
+
+#define __LOG_FILE_LINE_PART(file, line_num) "["file":"#line_num"]"
+
+#define __LOG_BASE(__logger, x, level, file, line_num) \
+	LOGGING_SCOPE(__logger, level) { \
 		using namespace sax::logger; \
-		/*log_header: "[20120822 11:34:27.456789][TRACE][filename.cpp:123] "*/ \
-		char log_header[26 /*datetime*/ + \
-		                (2+sizeof(#level)-4-1) /*log level, minus "SAX_"*/ + \
-						(3+sizeof(file)-1+sizeof(#line_num)-1) /*source*/ + \
-						1 /*space*/ + 1 /*'\0'*/]; \
+		/*log_header: "[20120822 11:34:27.456789][12345][TRACE][filename.cpp:123]"*/ \
 		int64_t now_us = g_now_us(); \
-		struct tm st; \
-		fast_localtime(now_us / 1000000, &st); \
-		sprintf(log_header, "[%04d%02d%02d %02d:%02d:%02d.%06d][%s][%s:%d] ", \
-				st.tm_year + 1900, st.tm_mon + 1, st.tm_mday, \
-				st.tm_hour, st.tm_min, st.tm_sec, (int) (now_us % 1000000), \
-				#level + 4, file, line_num); \
-		__LOGGING_LOG(logger_, log_header << x); \
+		update_log_buf(now_us, state); \
+		char* log_buf = state.log_buf + LOG_TIME_LEN + LOG_TID_LEN; \
+		log_buf[0] = '['; \
+		memcpy(log_buf + 1, #level + 4, sizeof(#level) - 4 - 1); \
+		log_buf[1 + sizeof(#level) - 4 - 1] = ']'; \
+		log_buf += 1 + sizeof(#level) - 4 - 1 + 1; \
+		memcpy(log_buf, __LOG_FILE_LINE_PART(file, line_num), \
+				sizeof(__LOG_FILE_LINE_PART(file, line_num)) - 1); \
+		log_buf += sizeof(__LOG_FILE_LINE_PART(file, line_num)) - 1; \
+		log_serializer serializer(log_buf, \
+				MAX_LOG_SIZE - (log_buf - state.log_buf)); \
+		size_t log_size = (int32_t) ((serializer << ' ' << x).end_of_line() - \
+				state.log_buf); \
+		__logger->log(state.log_buf, log_size); \
 	}
 #endif
 
@@ -142,21 +81,23 @@ void fast_localtime(int64_t unix_sec, struct tm* st);
 
 namespace sax {
 namespace logger {
-#if __LOGGING_SYNC
+
 extern log_file_writer<mutex_type>* __global_sync_logger;
 #define __GLOBAL_LOGGER sax::logger::__global_sync_logger
 
 bool init_global_sync_logger(const std::string& logfile_name,
 		int32_t max_logfiles, size_t size_per_logfile, log_level level);
 
+void destroy_global_sync_logger();
+
 #ifdef LOG_OFF
 #define INIT_GLOBAL_LOGGER(...)
+#define DESTROY_GLOBAL_LOGGER()
 #else
 #define INIT_GLOBAL_LOGGER(...) sax::logger::init_global_sync_logger(__VA_ARGS__)
+#define DESTROY_GLOBAL_LOGGER() sax::logger::destroy_global_sync_logger()
 #endif
 
-#else
-#endif
 }
 }
 

@@ -11,6 +11,7 @@
 #include "sax/os_api.h"
 #include "sax/sysutil.h"
 #include "log_file_writer.h"
+#include "logger.h"
 
 namespace sax {
 namespace logger {
@@ -19,6 +20,102 @@ namespace logger {
 log_file_writer<mutex_type>* __global_sync_logger = NULL;
 
 
+bool init_global_sync_logger(const std::string& logfile_name,
+		int32_t max_logfiles, size_t size_per_logfile, log_level level)
+{
+	__global_sync_logger = new log_file_writer<mutex_type>(
+			logfile_name, max_logfiles, size_per_logfile, level);
+	return __global_sync_logger != NULL;
+}
+
+void destroy_global_sync_logger()
+{
+	if (__global_sync_logger != NULL) {
+		delete __global_sync_logger;
+	}
+}
+
+////////////////////////////////////////////////////////////////////
+
+thread_local log_state state = {0};
+
+////////////////////////////////////////////////////////////////////
+
+static void fast_int2str(int32_t num, char* str, int32_t digits)
+{
+	char* p = str + digits - 1;
+	for (int32_t i = 0; i < digits; i++) {
+		*p = (char) (num % 10) + '0';
+		num /= 10;
+		--p;
+	}
+}
+
+void update_log_buf(int64_t timestamp_us, log_state& state)
+{
+	/*time format: [20120822 11:34:27.456789]*/
+	int64_t secs = timestamp_us / 1000000;
+	int32_t us_part = (int32_t) (timestamp_us % 1000000);
+	int64_t hours = secs / 3600;
+	if (UNLIKELY(hours != state.last_hours)) {
+		struct tm st;
+		fast_localtime(secs, &st);
+
+		/*date=20120822*/
+		int32_t date = (st.tm_year + 1900) * 10000 +
+				(st.tm_mon + 1) * 100 +
+				st.tm_mday;
+
+		/*time=11034027, and then rewrite '0' as ':'*/
+		int32_t time = st.tm_hour * 1000000 +
+				st.tm_min * 1000 +
+				st.tm_sec;
+
+		// "_20120822_________________"
+		fast_int2str(date, state.log_buf + 1, 8);
+
+		// "_20120822_11034027________"
+		fast_int2str(time, state.log_buf + 10, 8);
+
+		// "_20120822_11034027_456789_"
+		fast_int2str(us_part, state.log_buf + 19, 6);
+
+		state.log_buf[0]  = '[';	// "[20120822_11034027_456789_"
+		state.log_buf[9]  = ' ';	// "[20120822 11034027_456789_"
+		state.log_buf[12] = ':';	// "[20120822 11:34027_456789_"
+		state.log_buf[15] = ':';	// "[20120822 11:34:27_456789_"
+		state.log_buf[18] = '.';	// "[20120822 11:34:27.456789_"
+		state.log_buf[25] = ']';	// "[20120822 11:34:27.456789]"
+
+		if (UNLIKELY(state.last_hours == 0)) {
+			// the first time update log_buf, write the tid part
+			int32_t tid = (int32_t) g_thread_id();
+			fast_int2str(tid, state.log_buf + LOG_TIME_LEN + 1, 5);
+			state.log_buf[LOG_TIME_LEN] = '[';
+			state.log_buf[LOG_TIME_LEN + 6] = ']';
+		}
+
+		state.last_hours = hours;
+		state.last_minute = st.tm_min;
+	}
+	else {
+		// just need to update minute, second and microsecond part
+		int32_t minute = (int32_t) (secs / 60 % 60);
+		int32_t second = (int32_t) (secs % 60);
+
+		if (UNLIKELY(state.last_minute != minute)) {
+			fast_int2str(minute, state.log_buf + 13, 2);
+			state.last_minute = minute;
+		}
+
+		/*27.456789*/
+		fast_int2str(second * 10000000 + us_part, state.log_buf + 16, 9);
+
+		state.log_buf[18] = '.';
+	}
+}
+
+////////////////////////////////////////////////////////////////////
 static int s_tz_offset = g_timezone() * 3600;
 
 #ifdef __isleap
@@ -70,14 +167,6 @@ void fast_localtime(int64_t unix_sec, struct tm* st)
 	days -= ip[y];
 	st->tm_mon = y;
 	st->tm_mday = days + 1;
-}
-
-bool init_global_sync_logger(const std::string& logfile_name,
-		int32_t max_logfiles, size_t size_per_logfile, log_level level)
-{
-	__global_sync_logger = new log_file_writer<mutex_type>(
-			logfile_name, max_logfiles, size_per_logfile, level);
-	return __global_sync_logger != NULL;
 }
 
 } // namespace logger
