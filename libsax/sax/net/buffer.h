@@ -200,7 +200,7 @@ public:
 		union bytes
 		{
 			uint16_t num_type;
-			uint8_t  buf[sizeof(num_type)];
+			uint8_t  buf[sizeof(uint16_t)];
 		} b;
 
 		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
@@ -219,7 +219,7 @@ public:
 		union bytes
 		{
 			uint32_t num_type;
-			uint8_t  buf[sizeof(num_type)];
+			uint8_t  buf[sizeof(uint32_t)];
 		} b;
 
 		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
@@ -238,7 +238,7 @@ public:
 		union bytes
 		{
 			uint64_t num_type;
-			uint8_t  buf[sizeof(num_type)];
+			uint8_t  buf[sizeof(uint64_t)];
 		} b;
 
 		if (UNLIKELY(!get(b.buf, sizeof(b.buf)))) return false;
@@ -343,6 +343,53 @@ public:
 		return true;
 	}
 
+	// return the buffer pointer for direct put,
+	// call commit_put() to confirm
+	inline char* direct_put(uint32_t prepare_length)
+	{
+		if (UNLIKELY(_limit != INVALID_VALUE ||
+				!reserve(_current + prepare_length))) {
+			return NULL;
+		}
+		return _buf + _current;
+	}
+
+	// param: direct  pointer returned by direct_put()
+	//        length  length of direct put bytes
+	inline bool commit_put(char* direct, uint32_t length)
+	{
+		if (UNLIKELY(_limit != INVALID_VALUE ||
+				_buf + _current != direct ||
+				_current + length > _capacity)) {
+			return false;
+		}
+		_current += length;
+		return true;
+	}
+
+	// return the buffer pointer for direct get,
+	// call commit_get() to confirm
+	inline char* direct_get()
+	{
+		if (UNLIKELY(_limit == INVALID_VALUE)) {
+			return NULL;
+		}
+		return _buf + _current;
+	}
+
+	// param: direct  pointer returned by direct_get()
+	//        length  length of direct put bytes
+	inline bool commit_get(char* direct, uint32_t length)
+	{
+		if (UNLIKELY(_limit == INVALID_VALUE ||
+				_buf + _current != direct ||
+				_current + length > _limit)) {
+			return false;
+		}
+		_current += length;
+		return true;
+	}
+
 private:
 	// no copy
 	buffer(const buffer&);
@@ -359,8 +406,13 @@ private:
 			char* tmp = alloc_buffer(pages);
 			if (UNLIKELY(tmp == NULL)) return false;
 
+			// buggy:
+			// 1. _buf could be NULL, but _current must be 0 at that time,
+			//    so nothing will happen.
+			// 2. free_buffer(NULL) is also ok because it is a wrapper of ::free().
 			memcpy(tmp, _buf, _current);
 			free_buffer(_buf);
+
 			_buf = tmp;
 			_capacity = pages * _block_size;
 		}

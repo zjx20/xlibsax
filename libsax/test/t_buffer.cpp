@@ -417,6 +417,49 @@ TEST(buffer, moving)
 	}
 }
 
+TEST(buffer, direct_put)
+{
+	buffer buf;
+	char* ptr = buf.direct_put(100);
+	memcpy(ptr, "hello", 5);
+	EXPECT_TRUE(buf.commit_put(ptr, 5));
+	EXPECT_FALSE(buf.commit_put(ptr, 5));
+	EXPECT_TRUE(buf.flip());
+
+	char tmp[200] = {0};
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, buf.remaining()));
+	EXPECT_STREQ("hello", tmp);
+
+	EXPECT_FALSE(buf.commit_put(ptr, 123));
+	EXPECT_EQ(NULL, buf.direct_put(10));
+
+	EXPECT_TRUE(buf.compact());
+	ptr = buf.direct_put(100);
+	EXPECT_FALSE(buf.commit_put(ptr, BLOCK_SIZE + 100));
+}
+
+TEST(buffer, direct_get)
+{
+	buffer buf;
+
+	EXPECT_EQ(NULL, buf.direct_get());
+	EXPECT_FALSE(buf.commit_get(NULL, 213));
+
+	buf.put((uint8_t*) "something", 9);
+	buf.put((uint32_t) 123456);
+	buf.flip();
+	char* ptr = buf.direct_get();
+	char tmp[200] = {0};
+	memcpy(tmp, ptr, 9);
+	EXPECT_STREQ("something", tmp);
+	EXPECT_FALSE(buf.commit_get(ptr, 100));
+	EXPECT_TRUE(buf.commit_get(ptr, 9));
+	EXPECT_FALSE(buf.commit_get(ptr, 1));
+
+	uint32_t tmp_num;
+	EXPECT_TRUE(buf.get(tmp_num));
+	EXPECT_EQ(123456U, tmp_num);
+}
 
 int main(int argc, char *argv[])
 {
