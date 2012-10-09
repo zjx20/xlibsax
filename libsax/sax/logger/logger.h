@@ -23,12 +23,12 @@ const int32_t LOG_TID_LEN = sizeof("[12345]") - 1;	// 5 digits
 
 struct log_state
 {
-	int64_t last_hours;
-	int32_t last_minute;
+	int64_t last_minutes;
+	int32_t last_second;
 	char log_buf[MAX_LOG_SIZE];
 };
 
-extern thread_local log_state state;
+extern thread_local log_state __state;
 
 // only convert unix timestamp to date and time (the first 6 fields in struct tm)
 void fast_localtime(int64_t unix_sec, struct tm* st);
@@ -45,18 +45,18 @@ void update_log_buf(int64_t timestamp_us, log_state& state);
 	if (__LOGGING_GET_LEVEL(__logger) <= sax::logger::level)
 
 #ifdef LOG_OFF
-#define __LOG_BASE(logger_, x, level, file, line_num)
+#define __LOG_BASE(logger_, x, level, file, line_num, func)
 #else
 
 #define __LOG_FILE_LINE_PART(file, line_num) "["file":"#line_num"]"
 
-#define __LOG_BASE(__logger, x, level, file, line_num) \
+#define __LOG_BASE(__logger, x, level, file, line_num, func) \
 	LOGGING_SCOPE(__logger, level) { \
 		using namespace sax::logger; \
-		/*log_header: "[20120822 11:34:27.456789][12345][TRACE][filename.cpp:123]"*/ \
+		/*log_header: "[20120822 11:34:27.456789][12345][TRACE][filename.cpp:123][func]"*/ \
 		int64_t now_us = g_now_us(); \
-		update_log_buf(now_us, state); \
-		char* log_buf = state.log_buf + LOG_TIME_LEN + LOG_TID_LEN; \
+		update_log_buf(now_us, __state); \
+		char* log_buf = __state.log_buf + LOG_TIME_LEN + LOG_TID_LEN; \
 		log_buf[0] = '['; \
 		memcpy(log_buf + 1, #level + 4, sizeof(#level) - 4 - 1); \
 		log_buf[1 + sizeof(#level) - 4 - 1] = ']'; \
@@ -64,19 +64,23 @@ void update_log_buf(int64_t timestamp_us, log_state& state);
 		memcpy(log_buf, __LOG_FILE_LINE_PART(file, line_num), \
 				sizeof(__LOG_FILE_LINE_PART(file, line_num)) - 1); \
 		log_buf += sizeof(__LOG_FILE_LINE_PART(file, line_num)) - 1; \
+		log_buf[0] = '['; \
+		memcpy(log_buf + 1, func, sizeof(func) - 1); \
+		log_buf[sizeof(func)-1 + 1] = ']'; \
+		log_buf += sizeof(func)-1 + 2; \
 		log_serializer serializer(log_buf, \
-				MAX_LOG_SIZE - (log_buf - state.log_buf)); \
+				MAX_LOG_SIZE - (log_buf - __state.log_buf)); \
 		size_t log_size = (int32_t) ((serializer << ' ' << x).end_of_line() - \
-				state.log_buf); \
-		__logger->log(state.log_buf, log_size); \
+				__state.log_buf); \
+		__logger->log(__state.log_buf, log_size); \
 	}
 #endif
 
-#define LOGP_TRACE(logger, x) __LOG_BASE(logger, x, SAX_TRACE, __FILE__, __LINE__)
-#define LOGP_DEBUG(logger, x) __LOG_BASE(logger, x, SAX_DEBUG, __FILE__, __LINE__)
-#define LOGP_INFO(logger, x)  __LOG_BASE(logger, x, SAX_INFO,  __FILE__, __LINE__)
-#define LOGP_WARN(logger, x)  __LOG_BASE(logger, x, SAX_WARN,  __FILE__, __LINE__)
-#define LOGP_ERROR(logger, x) __LOG_BASE(logger, x, SAX_ERROR, __FILE__, __LINE__)
+#define LOGP_TRACE(logger, x) __LOG_BASE(logger, x, SAX_TRACE, __FILE__, __LINE__, __func__)
+#define LOGP_DEBUG(logger, x) __LOG_BASE(logger, x, SAX_DEBUG, __FILE__, __LINE__, __func__)
+#define LOGP_INFO(logger, x)  __LOG_BASE(logger, x, SAX_INFO,  __FILE__, __LINE__, __func__)
+#define LOGP_WARN(logger, x)  __LOG_BASE(logger, x, SAX_WARN,  __FILE__, __LINE__, __func__)
+#define LOGP_ERROR(logger, x) __LOG_BASE(logger, x, SAX_ERROR, __FILE__, __LINE__, __func__)
 
 
 namespace sax {

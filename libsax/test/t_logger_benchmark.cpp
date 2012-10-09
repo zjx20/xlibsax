@@ -10,7 +10,7 @@
 #if !defined(LOGGING_ASYNC)
 sax::logger::log_file_writer<sax::spin_type>* logger =
 		new sax::logger::log_file_writer<sax::spin_type>(
-				"t_logger_benchmark.txt", 10, 100 * 1024 * 1024, sax::logger::SAX_TRACE);
+				"t_logger_benchmark.txt", 10, 1000 * 1024 * 1024, sax::logger::SAX_TRACE);
 #else
 sax::stage* logger = sax::stage_creator<sax::logger::log_handler>::create_stage(
 		"logging", 1, NULL, 10*1024*1024, new sax::single_dispatcher());

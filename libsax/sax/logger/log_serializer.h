@@ -46,7 +46,7 @@ public:
 	inline char* end_of_line()
 	{
 		if (UNLIKELY(_space == 0)) {
-			memcpy((_buf - sizeof(TRUNCATED_MESSAGE) - 1),
+			memcpy((_buf - (sizeof(TRUNCATED_MESSAGE) - 1)),
 					TRUNCATED_MESSAGE, sizeof(TRUNCATED_MESSAGE) - 1);
 		}
 		else if (LIKELY(*(_buf - 1) != '\n')) {

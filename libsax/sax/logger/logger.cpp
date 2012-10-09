@@ -17,15 +17,26 @@ namespace sax {
 namespace logger {
 
 
-log_file_writer<mutex_type>* __global_sync_logger = NULL;
+log_file_writer<mutex_type>* __global_sync_logger =
+		new log_file_writer<mutex_type>("stdout",
+				100, (size_t) -1, /* it doesn't matter */
+				SAX_TRACE);
 
 
 bool init_global_sync_logger(const std::string& logfile_name,
 		int32_t max_logfiles, size_t size_per_logfile, log_level level)
 {
+	log_file_writer<mutex_type>* old = __global_sync_logger;
 	__global_sync_logger = new log_file_writer<mutex_type>(
 			logfile_name, max_logfiles, size_per_logfile, level);
-	return __global_sync_logger != NULL;
+
+	if (__global_sync_logger != NULL) {
+		if (old) delete old;
+		return true;
+	}
+
+	__global_sync_logger = old;
+	return false;
 }
 
 void destroy_global_sync_logger()
@@ -37,7 +48,7 @@ void destroy_global_sync_logger()
 
 ////////////////////////////////////////////////////////////////////
 
-thread_local log_state state = {0};
+thread_local log_state __state = {0};
 
 ////////////////////////////////////////////////////////////////////
 
@@ -56,8 +67,10 @@ void update_log_buf(int64_t timestamp_us, log_state& state)
 	/*time format: [20120822 11:34:27.456789]*/
 	int64_t secs = timestamp_us / 1000000;
 	int32_t us_part = (int32_t) (timestamp_us % 1000000);
-	int64_t hours = secs / 3600;
-	if (UNLIKELY(hours != state.last_hours)) {
+	int64_t minutes = secs / 60;
+	int32_t second = (int32_t) (secs % 60);
+
+	if (UNLIKELY(minutes != state.last_minutes)) {
 		struct tm st;
 		fast_localtime(secs, &st);
 
@@ -87,7 +100,7 @@ void update_log_buf(int64_t timestamp_us, log_state& state)
 		state.log_buf[18] = '.';	// "[20120822 11:34:27.456789_"
 		state.log_buf[25] = ']';	// "[20120822 11:34:27.456789]"
 
-		if (UNLIKELY(state.last_hours == 0)) {
+		if (UNLIKELY(state.last_minutes == 0)) {
 			// the first time update log_buf, write the tid part
 			int32_t tid = (int32_t) g_thread_id();
 			fast_int2str(tid, state.log_buf + LOG_TIME_LEN + 1, 5);
@@ -95,23 +108,20 @@ void update_log_buf(int64_t timestamp_us, log_state& state)
 			state.log_buf[LOG_TIME_LEN + 6] = ']';
 		}
 
-		state.last_hours = hours;
-		state.last_minute = st.tm_min;
+		state.last_minutes = minutes;
+		state.last_second = second;
 	}
 	else {
-		// just need to update minute, second and microsecond part
-		int32_t minute = (int32_t) (secs / 60 % 60);
-		int32_t second = (int32_t) (secs % 60);
-
-		if (UNLIKELY(state.last_minute != minute)) {
-			fast_int2str(minute, state.log_buf + 13, 2);
-			state.last_minute = minute;
+		// just need to update second and microsecond part
+		if (UNLIKELY(state.last_second != second)) {
+			state.last_second = second;
+			fast_int2str(second * 10000000 + us_part,
+					state.log_buf + 16, 9);
+			state.log_buf[18] = '.';
 		}
-
-		/*27.456789*/
-		fast_int2str(second * 10000000 + us_part, state.log_buf + 16, 9);
-
-		state.log_buf[18] = '.';
+		else {
+			fast_int2str(us_part, state.log_buf + 19, 6);
+		}
 	}
 }
 

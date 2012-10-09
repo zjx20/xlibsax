@@ -327,8 +327,8 @@ TEST(log, basic_test)
 			new sax::logger::log_file_writer<sax::mutex_type>(
 					"stdout", 100, 100, sax::logger::SAX_TRACE);
 
-	LOGP_TRACE(logger, "hello logger!" << 1);
-	LOGP_TRACE(logger, "TRACE level!" << 2);
+	LOGP_TRACE(logger, "hello logger!" << 1 << ' ' << logger);
+	LOGP_TRACE(logger, "TRACE level!" << 2 << ' ' << (uintptr_t) logger);
 	LOGP_DEBUG(logger, "DEBUG level!" << 3);
 	LOGP_INFO(logger, "INFO level!" << 4);
 	LOGP_WARN(logger, "WARN level!" << 5);
