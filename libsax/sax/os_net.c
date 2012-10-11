@@ -132,7 +132,7 @@ int g_set_keepalive(int fd, int idle, int intvl, int probes)
 		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &probes, sizeof(probes)));
 	if (ret) return 0;
 	
-	on = 0; // diable keepAlive when error
+	on = 0; // disable keepAlive when error
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	return -1;
 }
@@ -378,7 +378,7 @@ g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
 
 	h->epfd = epoll_create(1024);	// 1024 just a hint for kernel. for more details, man epoll_create()
 	if (h->epfd == -1) {
-		fprintf(stderr, "error happened when calling epoll_create() in g_eda_open(). errno: %d %s\n",
+		fprintf(stderr, "error occurred when calling epoll_create() in g_eda_open(). errno: %d %s\n",
 				errno, strerror(errno));
 		free(h);
 		return NULL;
@@ -407,7 +407,7 @@ int g_eda_add(g_eda_t* mgr, int fd, int mask)
 	ee.data.u64 = fd;	// make valgrind silence
 
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee) == 0 )) return 0;
-	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_add(). fd: %d errno: %d %s\n",
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_add(). fd: %d errno: %d %s\n",
 			fd, errno, strerror(errno));
 	return -1;
 }
@@ -415,7 +415,7 @@ int g_eda_add(g_eda_t* mgr, int fd, int mask)
 int g_eda_del(g_eda_t* mgr, int fd)
 {
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL) == 0 )) return 0;
-	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_del(). fd: %d errno: %d %s\n",
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_del(). fd: %d errno: %d %s\n",
 			fd, errno, strerror(errno));
 	return -1;
 }
@@ -428,7 +428,7 @@ void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
 	ee.data.u64 = fd;	// make valgrind silence
 	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) return;
-	fprintf(stderr, "error happened when calling epoll_ctl() in g_eda_mod(). fd: %d errno: %d %s\n",
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_mod(). fd: %d errno: %d %s\n",
 			fd, errno, strerror(errno));
 }
 

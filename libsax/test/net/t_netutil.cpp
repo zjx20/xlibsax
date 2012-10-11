@@ -40,7 +40,7 @@ struct my_handler : public sax::transport_handler
 	{
 		char temp[1024];
 		while (buf->remaining()) {
-			size_t len = std::min(sizeof(temp), buf->remaining());
+			size_t len = std::min(sizeof(temp), (size_t) buf->remaining());
 			buf->get((uint8_t*) temp, len);
 			_trans->send(tid, response, strlen(response));
 		}
@@ -128,6 +128,8 @@ int main(int argc, char* argv[])
 	}
 
 	delete[] ts;
+
+	DESTROY_GLOBAL_LOGGER();
 
 	return 0;
 }

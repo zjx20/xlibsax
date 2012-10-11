@@ -4,10 +4,9 @@
 #include <new>
 #include "sax/os_types.h"
 #include "sax/os_net.h"
-#include "sax/mempool.h"
 #include "buffer.h"
+#include "linked_buffer.h"
 
-#define BUFFER_BLOCK_SIZE 2048
 #define MAX_UDP_PACKAGE_SIZE 2048
 
 namespace sax {
@@ -65,7 +64,7 @@ private:
 		uint32_t ip_n;
 		id       tid;
 		buffer*  read_buf;
-		buffer*  write_buf;
+		linked_buffer*  write_buf;
 	};
 
 public:
@@ -131,6 +130,7 @@ struct transport_handler
 {
 	virtual void on_accepted(const transport::id& new_conn,
 			const transport::id& from) {}
+	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) {}
 	virtual void on_tcp_recieved(const transport::id& tid, buffer* buf) {}
 	virtual void on_udp_recieved(const transport::id& tid,
 			const char* data, size_t length, uint32_t ip_n, uint16_t port_h) {}

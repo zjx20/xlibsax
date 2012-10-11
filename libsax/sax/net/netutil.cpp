@@ -127,7 +127,7 @@ bool transport::add_fd(int fd, int eda_mask, uint32_t ip_n, uint16_t port_h,
 	// for TCP_LISTEN or UDP_BIND, it is no necessary to use buffers.
 	// but just let it waste some memory, to eliminate a branch.
 	// TODO: may throw std::bad_alloc
-	ctx.write_buf = new buffer();
+	ctx.write_buf = new linked_buffer();
 	ctx.read_buf = new buffer();
 
 	ctx.tid.fd = fd;
@@ -197,6 +197,7 @@ bool transport::connect(const char* addr, uint16_t port_h, id& tid)
 	if (fd == -1) return false;
 
 	if (g_set_non_block(fd) == -1 ||
+			g_set_keepalive(fd, 60, 10, 3) == -1 ||	// detect errors in 90 seconds
 			!add_fd(fd, EDA_READ, addr, port_h, context::TCP_CONNECTION)) {
 		g_close_socket(fd);
 		return false;
@@ -220,6 +221,7 @@ void transport::close(const id& tid)
 	_ctx[tid.fd].read_buf = NULL;
 
 	// should close socket at last, to avoid concurrent problem
+	// eg: the fd would be accepted again by other thread
 	g_close_socket(tid.fd);
 }
 
@@ -231,6 +233,7 @@ void transport::poll(uint32_t millseconds)
 
 void transport::toggle_write(int fd, bool on/* = true*/)
 {
+	// -1 == 11111111111111111111111111111111
 	g_eda_mod(_eda, fd, EDA_READ | (-((int) on) & EDA_WRITE));
 }
 
@@ -280,62 +283,61 @@ bool transport::handle_tcp_write(transport* trans, int fd, context& ctx)
 	 * 4. return other error if socket is broken when sending.
 	 */
 
-	buffer* buf = ctx.write_buf;
-	// TODO: eliminate data copying
-	char temp[1024];
+	linked_buffer* buf = ctx.write_buf;
 
 	buf->flip();
 
 	LOG_TRACE("in handle_tcp_write()," <<
-			" thread_id: " << g_thread_id() <<
-			" trans: " << (intptr_t) trans <<
+			" trans: " << trans <<
 			" fd: " << fd <<
 			" buf->remaining(): " << buf->remaining());
 
-	while (buf->remaining()) {
-		buf->mark();
-		int len = (int) (sizeof(temp) < buf->remaining() ? sizeof(temp) : buf->remaining());
-		buf->get((uint8_t*) temp, len);
-		int ret = g_tcp_write(fd, temp, len);
+	uint32_t total_send = 0;
+
+	while(buf->remaining()) {
+		uint32_t len;
+		char* buf_ptr = buf->direct_get(len);
+
+		int ret = g_tcp_write(fd, buf_ptr, len);
 
 		LOG_TRACE("in handle_tcp_write()," <<
-				" thread_id: " << g_thread_id() <<
-				" trans: " << (intptr_t) trans <<
+				" trans: " << trans <<
 				" fd: " << fd <<
 				" g_tcp_write(): " << ret <<
 				" errno: " << errno);
 
 		if (LIKELY(ret > 0)) {
-			if (ret < len) {
+			total_send += ret;
+			buf->commit_get(buf_ptr, ret);
+			if ((uint32_t) ret != len) {
 				// io buffer is full, wait for next time
-				buf->reset();
-				buf->skip(ret);
-				buf->compact();
-				return true;
+				break;
 			}
 		}
 		else {
-			if (LIKELY(errno == EAGAIN || errno == EWOULDBLOCK ||
-					errno == EINTR)) {
-				// io buffer is full, wait for next time
-				buf->reset();
-				buf->compact();
-				return true;
-			}
-			else {
-				// error happen when writing
+			if (UNLIKELY(errno != EAGAIN && errno != EWOULDBLOCK &&
+					errno != EINTR)) {
+				// error occurred when writing
 				id tid = ctx.tid;
 				trans->close(tid);
 				trans->_handler->on_closed(tid, errno);
 				return false;
 			}
+			else {
+				// io buffer is full, wait for next time
+				break;
+			}
 		}
 	}
 
-	buf->compact();
+	trans->_handler->on_tcp_send(ctx.tid, total_send);
 
-	// nothing to send, turn off EDA_WRITE
-	trans->toggle_write(fd, false);
+	if (buf->remaining() == 0) {
+		// nothing to send, turn off EDA_WRITE
+		trans->toggle_write(fd, false);
+	}
+
+	buf->compact();
 
 	return true;
 }
@@ -347,31 +349,37 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 		return false;
 	}
 
-	buffer* write_buf = _ctx[tid.fd].write_buf;
-	// FIXME: the following code is commented for compile...
-//	if (UNLIKELY(!write_buf->reserve(write_buf->position() + length))) {
-//		// no memory for writing
-//		return false;
-//	}
+	linked_buffer* write_buf = _ctx[tid.fd].write_buf;
+
+	if (UNLIKELY(!write_buf->reserve(length))) {
+		// no memory for writing
+		LOG_WARN("cannot expand write buffer for sending data." <<
+				" fd: " << tid.fd <<
+				" write buffer capacity: " << write_buf->capacity());
+		return false;
+	}
 
 	if (write_buf->position() == 0) {
 		// send it directly, do not wait for eda_poll()
-		int len = length;
-		char* temp = const_cast<char*>(buf);
-		while (len > 0) {
-			int ret = g_tcp_write(tid.fd, temp, len);
-			if (LIKELY(ret > 0)) {
-				len -= ret;
-				temp += ret;
+		int ret = g_tcp_write(tid.fd, buf, length);
+		if (LIKELY(ret > 0)) {
+			if (UNLIKELY(ret < length)) {
+				// put the rest of data to write buffer, send it next time
+				write_buf->put((uint8_t*) buf + ret, length - ret);
+				toggle_write(tid.fd, true);
+			}
+			_handler->on_tcp_send(tid, ret);
+		}
+		else {
+			if (UNLIKELY(errno != EAGAIN && errno != EWOULDBLOCK &&
+					errno != EINTR)) {
+				LOG_WARN("in send(), fd: " << tid.fd <<
+						" errno: " << errno << " " << strerror(errno));
+				return false;
 			}
 			else {
-				LOG_TRACE("in send()," <<
-						" thread_id: " << g_thread_id() <<
-						" fd: " << tid.fd <<
-						" errno: " << errno);
-
-				// maybe a real error happened, just ignore it here
-				write_buf->put((uint8_t*) temp, len);
+				// io buffer is full
+				write_buf->put((uint8_t*) buf, length);
 				toggle_write(tid.fd, true);
 			}
 		}
@@ -393,34 +401,47 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 	 */
 
 	LOG_TRACE("in handle_tcp_read()," <<
-			" thread_id: " << g_thread_id() <<
-			" trans: " << (intptr_t) trans <<
+			" trans: " << trans <<
 			" fd: " << fd);
 
-	const int max_recv_once = 16 * 1024;	// TODO: magic number
+	const int max_recv_once = 8 * 1024;	// TODO: magic number
 	buffer* buf = ctx.read_buf;
 	int remaining = max_recv_once;	// do not read too much for one fd
-	// TODO: eliminate data copying
-	char temp[1024];
-	while (remaining > 0) {
-		// FIXME: the following code is commented for compile...
-//		if (UNLIKELY(!buf->reserve(buf->position() + sizeof(temp)))) {
-//			// no memory for receiving
-//			break;
-//		}
-		int ret = g_tcp_read(fd, temp, sizeof(temp));
+
+	do {
+		// yet another magic number, it is smaller than page size,
+		// so buffer won't expand every time
+		const int recv_once = 2048;
+
+		char* buf_ptr = buf->direct_put(recv_once);
+		if (UNLIKELY(buf_ptr == NULL)) {
+			LOG_WARN("cannot expand read buffer for receiving data." <<
+					" fd: " << fd <<
+					" trans: " << trans <<
+					" read buffer capacity: " << buf->capacity());
+			break;
+		}
+
+		int ret = g_tcp_read(fd, buf_ptr, recv_once);
 		if (LIKELY(ret > 0)) {
-			buf->put((uint8_t*) temp, ret);
-			remaining -= ret;
-			if (ret < (int) sizeof(temp)) {
+			buf->commit_put(buf_ptr, ret);
+
+			if (ret < recv_once) {
 				// io buffer is empty, wait for next time
 				LOG_TRACE("reading up. fd: " << fd);
 				break;
 			}
+
+			remaining -= ret;
 		}
 		else if (ret == 0) {
 			// connection close normally
 			LOG_TRACE("connection closed normally. fd: " << fd);
+
+			if (buf->data_length() > 0) {
+				buf->flip();
+				trans->_handler->on_tcp_recieved(ctx.tid, buf);
+			}
 
 			id tid = ctx.tid;
 			trans->close(tid);
@@ -434,9 +455,14 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 				break;
 			}
 			else {
-				// error happened when reading
-				LOG_TRACE("error happened. fd: " << fd <<
+				// error occurred when reading
+				LOG_DEBUG("error occurred. fd: " << fd <<
 						" errno: " << errno);
+
+				if (buf->data_length() > 0) {
+					buf->flip();
+					trans->_handler->on_tcp_recieved(ctx.tid, buf);
+				}
 
 				id tid = ctx.tid;
 				trans->close(tid);
@@ -444,14 +470,15 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 				return false;
 			}
 		}
-	}
+	} while (remaining > 0);
 
 	buf->flip();
 
 	trans->_handler->on_tcp_recieved(ctx.tid, buf);
 
-	if (UNLIKELY(ctx.tid.seq != -1 && buf->data_length() == (size_t) -1)) {
-		fprintf(stderr, "buf->compact() must be called in on_tcp_recieved().\n");
+	// connection may be closed by on_tcp_recieved(), so check ctx.tid.seq != -1
+	if (UNLIKELY(ctx.tid.seq != -1 && buf->data_length() == buffer::INVALID_VALUE)) {
+		LOG_ERROR("buf->compact() must be called in on_tcp_recieved().\n");
 		assert(0);
 	}
 
@@ -469,8 +496,8 @@ bool transport::handle_tcp_accept(transport* trans, int fd)
 		if (accepted_fd == -1) {
 			if (UNLIKELY(errno != EAGAIN && errno != EWOULDBLOCK)) {
 				// g_tcp_accept() never return EINTR
-				fprintf(stderr, "accept error in transport::handle_tcp_accept(). errno: %d %s\n",
-						errno, strerror(errno));
+				LOG_ERROR("accept error in transport::handle_tcp_accept()." <<
+						" errno: " << errno << " " << strerror(errno));
 				return false;
 			}
 
@@ -478,15 +505,16 @@ bool transport::handle_tcp_accept(transport* trans, int fd)
 			break;
 		}
 		else {
-			if (LIKELY(g_set_non_block(fd) != -1 &&
+			if (LIKELY(g_set_non_block(accepted_fd) != -1 &&
+					g_set_keepalive(accepted_fd, 60, 10, 3) != -1 &&	// detect errors in 90 seconds
 					trans->add_fd(accepted_fd, EDA_READ, ip_n, port_h,
-					context::TCP_CONNECTION))) {
+							context::TCP_CONNECTION))) {
 				trans->_handler->on_accepted(trans->_ctx[accepted_fd].tid,
 						trans->_ctx[fd].tid);
 			}
 			else {
 				// accpeted_fd exceed maxfds
-				fprintf(stderr, "cannot accept new connection, it exceed maxfds!\n");
+				LOG_ERROR("cannot accept new connection, exceed maxfds!");
 				g_close_socket(accepted_fd);
 				return false;
 			}
@@ -513,13 +541,13 @@ bool transport::handle_udp_read(transport* trans, int fd, context& ctx)
 	uint16_t port_h;
 	char temp[MAX_UDP_PACKAGE_SIZE];
 
-	while (remaining > 0) {
+	do {
 		int ret = g_udp_read(fd, temp, sizeof(temp), &ip_n, &port_h);
 
 		if (ret > 0) {
 			remaining -= ret;
 			if (UNLIKELY(ret > (int) sizeof(temp))) {
-				fprintf(stderr, "recv a large udp packet, dropped. len: %d\n", ret);
+				LOG_WARN("recv a large udp packet, dropped. len: " << ret);
 				continue;
 			}
 			trans->_handler->on_udp_recieved(ctx.tid, temp, ret, ip_n, port_h);
@@ -531,13 +559,13 @@ bool transport::handle_udp_read(transport* trans, int fd, context& ctx)
 				break;
 			}
 			else {
-				// unusual error happened
-				fprintf(stderr, "error happened in transport::handle_udp_read(). errno: %d %s\n",
-						errno, strerror(errno));
+				// unusual error occurred
+				LOG_WARN("error occurred in transport::handle_udp_read()." <<
+						" errno: " << errno << " " << strerror(errno));
 				return false;
 			}
 		}
-	}
+	} while (remaining > 0);
 
 	return true;
 }
