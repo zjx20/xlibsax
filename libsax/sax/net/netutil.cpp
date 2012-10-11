@@ -328,6 +328,7 @@ bool transport::handle_tcp_write(transport* trans, int fd, context& ctx)
 				break;
 			}
 		}
+		// else: io buffer is full, wait for next time
 	}
 
 	trans->_handler->on_tcp_send(ctx.tid, total_send);
