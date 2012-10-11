@@ -23,9 +23,24 @@ char response[] = "HTTP/1.1 200 OK\nServer: libsax/0.01\nDate: Thu, 30 Aug 2012 
 char response[] = "HTTP/1.1 200 OK\nServer: libsax/0.01\nDate: Thu, 30 Aug 2012 03:15:02 GMT\nContent-Type: text/html\nContent-Length: 151\nLast-Modified: Thu, 30 Aug 2012 03:04:37 GMT\nConnection: close\nAccept-Ranges: bytes\n\n<html>\n<head>\n<title>Welcome to nginx!</title>\n</head>\n<body bgcolor=\"white\" text=\"black\">\n<center><h1>Welcome to nginx!</h1></center>\n</body>\n</html>\n";
 #endif
 
+
 struct my_handler : public sax::transport_handler
 {
-	my_handler(sax::transport* trans) : _trans(trans) {}
+	uint64_t callback_send;
+	uint64_t total_send;
+	uint64_t async_send;
+
+	my_handler(sax::transport* trans) : _trans(trans)
+	{
+		callback_send = 0;
+		total_send = 0;
+		async_send = 0;
+	}
+
+	virtual void on_tcp_send(const sax::transport::id& tid, size_t send_bytes)
+	{
+		callback_send += send_bytes;
+	}
 
 	virtual void on_accepted(const sax::transport::id& new_conn,
 			const sax::transport::id& from)
@@ -42,7 +57,9 @@ struct my_handler : public sax::transport_handler
 		while (buf->remaining()) {
 			size_t len = std::min(sizeof(temp), (size_t) buf->remaining());
 			buf->get((uint8_t*) temp, len);
+			total_send += strlen(response);
 			_trans->send(tid, response, strlen(response));
+			async_send += total_send - callback_send;
 		}
 		buf->compact();
 
@@ -72,6 +89,10 @@ void* thread_func(void* param)
 	while (!finish) {
 		trans->poll(100);
 	}
+	// WARNING: hack code
+	my_handler* handler = static_cast<my_handler*>((sax::transport_handler*) ((void**) param)[0]);
+	printf("total send: %lu async send: %lu callback send: %lu\n",
+			handler->total_send, handler->async_send, handler->callback_send);
 	delete trans;
 	return 0;
 }
@@ -100,10 +121,11 @@ int main(int argc, char* argv[])
 	sax::transport trans;
 	my_handler* handler = new my_handler(&trans);
 
-	if (trans.init(10000, handler)) {
+	if (trans.init(11000, handler)) {
 		printf("transport inited.\n");
 		sax::transport::id tid;
 		if (trans.listen(NULL, 6543, 511, tid)) {
+			printf("start listen.\n");
 			if (thread_num > 1) {
 				for (int i=1;i<thread_num;i++) {
 					sax::transport* trans_clone = new sax::transport();
@@ -112,19 +134,15 @@ int main(int argc, char* argv[])
 					ts[i] = g_thread_start(thread_func, trans_clone);
 				}
 			}
-			printf("start listen.\n");
+
 			while (!finish) {
 				trans.poll(100);
 			}
-
-			trans.close(tid);
 		}
 	}
 
-	if (thread_num > 1) {
-		for (int i=1;i<thread_num;i++) {
-			g_thread_join(ts[i], NULL);
-		}
+	for (int i=1;i<thread_num;i++) {
+		g_thread_join(ts[i], NULL);
 	}
 
 	delete[] ts;
