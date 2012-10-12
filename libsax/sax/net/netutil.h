@@ -63,8 +63,8 @@ private:
 		uint16_t port_h;
 		uint32_t ip_n;
 		id       tid;
-		buffer*  read_buf;
-		linked_buffer*  write_buf;
+		linked_buffer* read_buf;
+		linked_buffer* write_buf;
 	};
 
 public:
@@ -129,12 +129,12 @@ private:
 struct transport_handler
 {
 	virtual void on_accepted(const transport::id& new_conn,
-			const transport::id& from) {}
-	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) {}
-	virtual void on_tcp_recieved(const transport::id& tid, buffer* buf) {}
-	virtual void on_udp_recieved(const transport::id& tid,
-			const char* data, size_t length, uint32_t ip_n, uint16_t port_h) {}
-	virtual void on_closed(const transport::id& tid, int err) {}
+			const transport::id& from) = 0;
+	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) = 0;
+	virtual void on_tcp_recieved(const transport::id& tid, linked_buffer* buf) = 0;
+	virtual void on_udp_recieved(const transport::id& tid, const char* data,
+			size_t length, uint32_t ip_n, uint16_t port_h) = 0;
+	virtual void on_closed(const transport::id& tid, int err) = 0;
 	virtual ~transport_handler() {}
 };
 

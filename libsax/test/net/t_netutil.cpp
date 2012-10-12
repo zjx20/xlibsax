@@ -51,7 +51,7 @@ struct my_handler : public sax::transport_handler
 		LOG_TRACE("new conn. thread_id: " << g_thread_id() << " fd: " << new_conn.fd);
 	}
 
-	virtual void on_tcp_recieved(const sax::transport::id& tid, sax::buffer* buf)
+	virtual void on_tcp_recieved(const sax::transport::id& tid, sax::linked_buffer* buf)
 	{
 		char temp[1024];
 		while (buf->remaining()) {
@@ -83,16 +83,21 @@ private:
 	sax::transport* _trans;
 };
 
+void print_send_stat(sax::transport* trans)
+{
+	// WARNING: hack code
+	my_handler* handler = static_cast<my_handler*>((sax::transport_handler*) ((void**) trans)[0]);
+	printf("total send: %lu async send: %lu callback send: %lu\n",
+			handler->total_send, handler->async_send, handler->callback_send);
+}
+
 void* thread_func(void* param)
 {
 	sax::transport* trans = (sax::transport*) param;
 	while (!finish) {
 		trans->poll(100);
 	}
-	// WARNING: hack code
-	my_handler* handler = static_cast<my_handler*>((sax::transport_handler*) ((void**) param)[0]);
-	printf("total send: %lu async send: %lu callback send: %lu\n",
-			handler->total_send, handler->async_send, handler->callback_send);
+	print_send_stat(trans);
 	delete trans;
 	return 0;
 }
@@ -138,6 +143,8 @@ int main(int argc, char* argv[])
 			while (!finish) {
 				trans.poll(100);
 			}
+
+			print_send_stat(&trans);
 		}
 	}
 
