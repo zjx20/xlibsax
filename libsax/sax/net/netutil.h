@@ -128,6 +128,9 @@ private:
 
 struct transport_handler
 {
+	transport_handler(transport* trans) : _trans(trans) {}
+	virtual ~transport_handler() {}
+
 	virtual void on_accepted(const transport::id& new_conn,
 			const transport::id& from) = 0;
 	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) = 0;
@@ -135,7 +138,9 @@ struct transport_handler
 	virtual void on_udp_recieved(const transport::id& tid, const char* data,
 			size_t length, uint32_t ip_n, uint16_t port_h) = 0;
 	virtual void on_closed(const transport::id& tid, int err) = 0;
-	virtual ~transport_handler() {}
+
+protected:
+	transport* _trans;
 };
 
 } // namespace

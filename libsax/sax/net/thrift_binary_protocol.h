@@ -228,6 +228,7 @@ public:
 		// Check for correct version number
 		int32_t version = sz & VERSION_MASK;
 		if (UNLIKELY(version != VERSION_1)) {
+			// TODO: no throw
 			throw std::exception();	// Bad version identifier
 		}
 
@@ -455,7 +456,7 @@ public:
 				result += skip(ftype);
 				//result += readFieldEnd();	// do nothing in readFieldEnd() for binary protocol
 			}
-			//result += readStructEnd();
+			//result += readStructEnd();	// do nothing in readFieldEnd() for binary protocol
 			return result;
 		}
 		case T_MAP:

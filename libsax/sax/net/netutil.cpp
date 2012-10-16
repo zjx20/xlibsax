@@ -198,8 +198,7 @@ bool transport::connect(const char* addr, uint16_t port_h, id& tid)
 	int fd = g_tcp_connect(addr, port_h, 1 /*non block*/);
 	if (fd == -1) return false;
 
-	if (g_set_non_block(fd) == -1 ||
-			g_set_keepalive(fd, 60, 10, 3) == -1 ||	// detect errors in 90 seconds
+	if (g_set_keepalive(fd, 60, 10, 3) == -1 ||	// detect errors in 90 seconds
 			!add_fd(fd, EDA_READ, addr, port_h, context::TCP_CONNECTION)) {
 		g_close_socket(fd);
 		return false;

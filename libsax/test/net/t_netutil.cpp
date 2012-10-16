@@ -30,7 +30,7 @@ struct my_handler : public sax::transport_handler
 	uint64_t total_send;
 	uint64_t async_send;
 
-	my_handler(sax::transport* trans) : _trans(trans)
+	my_handler(sax::transport* trans) : sax::transport_handler(trans)
 	{
 		callback_send = 0;
 		total_send = 0;
@@ -78,9 +78,6 @@ struct my_handler : public sax::transport_handler
 		//printf("conn closed. fd: %d errno: %d %s\n", tid.fd, err, strerror(err));
 		//finish = true;
 	}
-
-private:
-	sax::transport* _trans;
 };
 
 void print_send_stat(sax::transport* trans)
