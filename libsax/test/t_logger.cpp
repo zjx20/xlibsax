@@ -9,6 +9,10 @@
 #include "sax/logger/logger.h"
 #include "sax/sysutil.h"
 
+#if __GNUC__ < 4 || __GNUC_MINOR__ < 4
+#warning gcc version is too old to compiling the whole source file, gcc >= 4.4.6 is needed.
+#else
+
 TEST(static_checker_helper, basic_test)
 {
 	using namespace sax::logger;
@@ -187,6 +191,8 @@ TEST(log_size_traits, combine)
 			pointer << log_size_traits()));
 }
 
+#endif
+
 size_t get_file_size(const std::string& file)
 {
 	FILE* f = fopen(file.c_str(), "r");
@@ -238,7 +244,7 @@ TEST(log_file_writer, max_logfiles)
 		}
 	}
 
-	ASSERT_EQ(0, get_file_size(logfile_name));
+	ASSERT_EQ(size_t(0), get_file_size(logfile_name));
 	ASSERT_EQ(1, g_exists_file(logfile_name.c_str()));
 	ASSERT_EQ(1, g_exists_file((logfile_name + ".1").c_str()));
 	ASSERT_EQ(1, g_exists_file((logfile_name + ".2").c_str()));
@@ -267,7 +273,7 @@ TEST(log_file_writer, append_file)
 		LOG_S(log, " world");
 	}
 
-	ASSERT_EQ(11, get_file_size(logfile_name));
+	ASSERT_EQ(size_t(11), get_file_size(logfile_name));
 
 	system(clean_cmd.c_str());
 }
@@ -292,7 +298,7 @@ TEST(log_file_writer, curr_logfiles)
 		LOG_S(log, "01234567890");	// 11 chars
 	}
 
-	ASSERT_EQ(11, get_file_size(logfile_name + ".5"));
+	ASSERT_EQ(size_t(11), get_file_size(logfile_name + ".5"));
 
 	system(clean_cmd.c_str());
 }
@@ -328,7 +334,7 @@ TEST(log, basic_test)
 					"stdout", 100, 100, sax::logger::SAX_TRACE);
 
 	LOGP_TRACE(logger, "hello logger!" << 1 << ' ' << logger);
-	LOGP_TRACE(logger, "TRACE level!" << 2 << ' ' << (uintptr_t) logger);
+	LOGP_TRACE(logger, "TRACE level!" << 2 << ' ' << (uint64_t) logger);
 	LOGP_DEBUG(logger, "DEBUG level!" << 3);
 	LOGP_INFO(logger, "INFO level!" << 4);
 	LOGP_WARN(logger, "WARN level!" << 5);

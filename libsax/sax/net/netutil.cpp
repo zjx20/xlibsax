@@ -448,10 +448,6 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 	 * 2. read a closed or broken socket, will ret == 0.
 	 */
 
-	LOG_TRACE("in handle_tcp_read()," <<
-			" trans: " << trans <<
-			" fd: " << fd);
-
 	const int max_recv_once = 8 * 1024;	// TODO: magic number
 	linked_buffer* buf = ctx.read_buf;
 
@@ -459,6 +455,11 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 	char temp[max_recv_once];
 
 	int ret = g_tcp_read(fd, temp, sizeof(temp));
+
+	LOG_TRACE("in handle_tcp_read()," <<
+			" trans: " << trans <<
+			" fd: " << fd <<
+			" ret: " << ret);
 
 	if (LIKELY(ret > 0)) {
 		if (UNLIKELY(buf->put((uint8_t*) temp, ret) == false)) {

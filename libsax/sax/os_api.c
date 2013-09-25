@@ -321,7 +321,7 @@ int g_url_decode(const char *src, int src_len, char *dst,
 	return j;
 }
 
-int g_url_encode(const char *src, char *dst, int dst_len) 
+int g_url_encode(const char *src, char *dst, int dst_len)
 {
 	static const char *dont_escape = "._-$,;~()";
 	static const char *hex = "0123456789abcdef";
@@ -331,7 +331,7 @@ int g_url_encode(const char *src, char *dst, int dst_len)
 	for (; *src != '\0' && dst < end; src++, dst++) 
 	{
 		if (isalnum(*(unsigned char *) src) ||
-			strchr(dont_escape, * (unsigned char *) src) != NULL) 
+			strchr(dont_escape, * (unsigned char *) src) != NULL)
 		{
 			*dst = *src;
 		}
@@ -1709,8 +1709,13 @@ void* g_shm_alloc_pages(uint32_t pages)
 #include <errno.h>
 
 #include <sys/syscall.h>
-#include <sys/vfs.h>
+
+#ifndef __APPLE_CC__
+#include <sys/vfs.h>	// statfs() and struct statfs for linux, in g_disk_info()
 #include <sys/prctl.h>
+#else
+#include <sys/mount.h>	// statfs() and struct statfs for mac OS X, in g_disk_info()
+#endif
 
 #define __USE_GNU 1
 #include <sched.h>
@@ -2084,15 +2089,35 @@ void g_mutex_enter(g_mutex_t *p)
 #endif // PTHREAD_MUTEX_RECURSIVE
 }
 
+#ifdef __APPLE_CC__
+#define TIMED_LOCK(trylock, sec, ret) \
+	do { \
+		int64_t interval = (int64_t) (sec * 1000000); \
+		int64_t start_us = g_now_us();                \
+		int64_t now_us;                               \
+		do {                                          \
+			usleep(10);                               \
+			ret = trylock;                            \
+			if (ret == 0) break;                      \
+			now_us = g_now_us();                      \
+		} while (now_us - start_us < interval);       \
+		ret = 1;                                      \
+	} while(0)
+#endif
+
 static int exec_try_lock(pthread_mutex_t *mt, double sec)
 {
 	int ret = pthread_mutex_trylock(mt);
 	if (0 == ret) return 0;
 
 	if (sec > 0) {
+#ifdef __APPLE_CC__
+		TIMED_LOCK(pthread_mutex_trylock(mt), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_mutex_timedlock(mt, &ts);
+#endif
 	}
 	return ret;
 }
@@ -2188,32 +2213,79 @@ void g_thread_pause() {asm ("pause");}
 
 void g_thread_exit(long ret) {pthread_exit((void *)ret);}
 
+#ifdef __APPLE_CC__
+long g_thread_id() {return (long)pthread_mach_thread_np(pthread_self());} //gettid()
+#else
 #ifndef SYS_gettid
 #define SYS_gettid __NR_gettid
 #endif
 long g_thread_id() {return (long)syscall(SYS_gettid);} //gettid()
+#endif
+
+#ifdef __APPLE_CC__
+// Thread Affinity API: http://developer.apple.com/library/mac/#releasenotes/Performance/RN-AffinityAPI/_index.html
+// code was ported from: https://bitbucket.org/bosilca/dague.public/src/115d9194bd7c/src/bindthread.c
+#include <mach/mach_init.h>
+#include <mach/thread_policy.h>
+static int bindthread(int cpu)
+{
+	// define this because it has been commented in mach/thread_policy.h, on mac OSX 10.8.2
+	kern_return_t	thread_policy_set(
+						thread_t					thread,
+						thread_policy_flavor_t		flavor,
+						thread_policy_t				policy_info,
+						mach_msg_type_number_t		count);
+
+	thread_affinity_policy_data_t ap;
+	int                           ret;
+
+	ap.affinity_tag = 1; /* non-null affinity tag */
+	ret = thread_policy_set(
+							mach_thread_self(),
+							THREAD_AFFINITY_POLICY,
+							(integer_t*) &ap,
+							THREAD_AFFINITY_POLICY_COUNT
+							);
+
+	return ret == 0 ? 1 : 0;
+}
+#else
+static int bindthread(int cpu)
+{
+	cpu_set_t _set;
+	cpu_set_t _get;
+
+	CPU_ZERO(&_set);
+	CPU_SET(cpu, &_set);
+	sched_setaffinity(0, sizeof(_set), &_set);
+
+	CPU_ZERO(&_get);
+	sched_getaffinity(0, sizeof(_get), &_get);
+
+	return CPU_ISSET(cpu, &_get);
+}
+#endif
 
 int g_thread_bind(int cpu, const char *name) 
 {
 	if (cpu >= 0) {
 		int num = sysconf(_SC_NPROCESSORS_CONF);
 		if (cpu < num) {
-			cpu_set_t _set;
-			cpu_set_t _get;
-			
-			CPU_ZERO(&_set);
-			CPU_SET(cpu, &_set);
-			sched_setaffinity(0, sizeof(_set), &_set);
-			
-			CPU_ZERO(&_get);
-			sched_getaffinity(0, sizeof(_get), &_get);
-			
-			return CPU_ISSET(cpu, &_get);
+			return bindthread(cpu);
 		}
 		return 0;
 	}
 	if (name && *name) {
-		prctl(PR_SET_NAME, name);
+		//prctl(PR_SET_NAME, name);
+
+#ifdef __APPLE_CC__
+#define PTHREAD_SETNAME(name) pthread_setname_np(name)
+#else
+#define PTHREAD_SETNAME(name) pthread_setname_np(pthread_self(), name)
+#endif
+
+		// use pthread_setname_np() for portability
+		PTHREAD_SETNAME(name);
 	}
 	return 1;
 }
@@ -2328,9 +2400,13 @@ int  g_share_try_lockw(g_share_t *s, double sec)
 	if (0 == ret) return 1;
 
 	if (sec > 0) {
+#ifdef __APPLE_CC__
+		TIMED_LOCK(pthread_rwlock_trywrlock(&s->lock), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_rwlock_timedwrlock(&s->lock, &ts);
+#endif
 	}
 	return (ret==0);
 }
@@ -2346,9 +2422,13 @@ int  g_share_try_lockr(g_share_t *s, double sec)
 	if (0 == ret) return 1;
 
 	if (sec > 0) {
+#ifdef __APPLE_CC__
+		TIMED_LOCK(pthread_rwlock_tryrdlock(&s->lock), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_rwlock_timedrdlock(&s->lock, &ts);
+#endif
 	}
 	return (ret==0);
 }
@@ -2666,9 +2746,15 @@ int	g_sema_wait(g_sema_t *s, double sec)
 		return (sem_wait(&s->sem)==0);
 	}
 	else if (sec > 0) {
+#ifdef __APPLE_CC__
+		int ret = 1;
+		TIMED_LOCK(sem_trywait(&s->sem), sec, ret);
+		return ret==0;
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		return (sem_timedwait(&s->sem, &ts)==0);
+#endif
 	}
 	return (sem_trywait(&s->sem)==0);
 }
@@ -2969,6 +3055,11 @@ static shm_t *shm_open_impl(
 		}
 	}
 	else {
+
+#ifdef __APPLE_CC__
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
 		if (!len) len = unit;
 		flags |= MAP_ANONYMOUS;
 	}

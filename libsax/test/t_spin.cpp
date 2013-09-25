@@ -31,11 +31,19 @@
 volatile int counter = 0;
 volatile int thread_count;
 int thread_total;
+g_mutex_t* g_lock = NULL;
+
+void inc_thread_count()
+{
+	g_mutex_enter(g_lock);
+	thread_count++;
+	g_mutex_leave(g_lock);
+}
 
 #if defined(SPIN_RWLOCK_PREFER_READER) || defined(SPIN_RWLOCK_PREFER_WRITER)
 void* reader_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -55,7 +63,7 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -90,7 +98,7 @@ void* init_lock()
 #if defined(SPIN_PURE)
 void* reader_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -110,7 +118,7 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -137,7 +145,7 @@ void* init_lock()
 #if defined(PTHREAD_MUTEX)
 void* reader_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -157,7 +165,7 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -182,10 +190,18 @@ void* init_lock()
 }
 #endif
 
+#if defined(__APPLE_CC__) && defined(PTHREAD_SPIN)
+#warning there is no pthread_spinlock_t in mac osx...
+#undef PTHREAD_SPIN
+void* reader_func(void* param) {return 0;}
+void* writer_func(void* param) {return 0;}
+void* init_lock() {return NULL;}
+#endif
+
 #if defined(PTHREAD_SPIN)
 void* reader_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -205,7 +221,7 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -230,10 +246,19 @@ void* init_lock()
 }
 #endif
 
+
+#if defined(__APPLE_CC__) && defined(PTHREAD_RWLOCK_PREFER_WRITER)
+#warning the implementation of pthread rwlock in mac osx is writer preferred
+#undef PTHREAD_RWLOCK_PREFER_WRITER
+#define PTHREAD_RWLOCK_PREFER_READER
+#endif
+
+
+
 #if defined(PTHREAD_RWLOCK_PREFER_READER) || defined(PTHREAD_RWLOCK_PREFER_WRITER)
 void* reader_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -253,7 +278,7 @@ void* reader_func(void* param)
 
 void* writer_func(void* param)
 {
-	thread_count++;
+	inc_thread_count();
 	while (thread_count != thread_total) g_thread_yield();
 
 	void** params = reinterpret_cast<void**>(param);
@@ -302,6 +327,8 @@ int main(int argc, char* argv[])
 
 	void* params[] = {init_lock(), &spin_times, &count};
 
+	g_lock = g_mutex_init();
+
 	thread_count = 0;
 	thread_total = reader_num + writer_num;
 
@@ -321,6 +348,8 @@ int main(int argc, char* argv[])
 	}
 
 	printf("counter: %d expect: %d\n", counter, writer_num * count);
+
+	g_mutex_free(g_lock);
 
 	return 0;
 }

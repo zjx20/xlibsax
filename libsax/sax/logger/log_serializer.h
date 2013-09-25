@@ -12,6 +12,7 @@
 #include <cstring>
 #include <string>
 #include <limits>
+#include <utility>
 #include <cassert>
 #include "sax/os_types.h"
 #include "sax/compiler.h"
@@ -217,6 +218,32 @@ log_serializer& operator << (log_serializer& serializer, const uint64_t& u64)
 	serializer.write(buf, len);
 	return serializer;
 }
+
+#if __GNUC__ < 4 || __GNUC_MINOR__ <= 2
+// this override is for gcc 4.2.1 in mac osx 10.8.4
+inline
+log_serializer& operator << (log_serializer& serializer, const size_t& size)
+{
+	STATIC_ASSERT(sizeof(size_t) <= 8, sizeof_size_t_is_greater_than_64_bit);
+
+	char buf[estimated_size::UINT64];
+	int32_t len = uint2str<uint64_t>(buf, size);
+	serializer.write(buf, len);
+	return serializer;
+}
+
+// this override is for gcc 4.2.1 in mac osx 10.8.4
+inline
+log_serializer& operator << (log_serializer& serializer, const long& value)
+{
+	STATIC_ASSERT(sizeof(long) <= 8, sizeof_long_is_greater_than_64_bit);
+
+	char buf[estimated_size::INT64];
+	int32_t len = uint2str<int64_t>(buf, value);
+	serializer.write(buf, len);
+	return serializer;
+}
+#endif
 
 inline
 log_serializer& operator << (log_serializer& serializer, const void* p)

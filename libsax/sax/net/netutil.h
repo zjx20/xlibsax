@@ -98,6 +98,8 @@ public:
 
 	void poll(uint32_t millseconds);
 
+	inline int32_t maxfds() {return _maxfds;}
+
 private:
 
 	bool add_fd(int fd, int eda_mask, const char* addr, uint16_t port_h,

@@ -70,13 +70,13 @@ class __static_assert_helper<true> {};
 
 // thread_local
 #if defined(SUPPORT_THREAD_LOCAL)
-// do nothing
-#elif defined(__GNUC__)
+#define thread_local thread_local
+#elif defined(__GNUC__) && !defined(__APPLE_CC__)
 #define thread_local __thread
 #elif defined(_MSC_VER)
 #define thread_local __declspec(thread)
 #else
-#warning "thread_local is unavailable."
+//#warning "thread_local is unavailable."
 #endif // thread_local
 
 #if defined(__cplusplus) || defined(c_plusplus)

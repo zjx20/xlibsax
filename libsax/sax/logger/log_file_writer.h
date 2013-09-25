@@ -21,6 +21,7 @@ namespace logger {
 
 enum log_level
 {
+	// adding "SAX_" prefix to prevent compile fail, because "TRACE" can be a macro in some system
 	SAX_TRACE = 1,
 	SAX_DEBUG,
 	SAX_INFO,

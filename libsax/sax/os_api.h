@@ -26,6 +26,7 @@
 /// handles the overflowed part with the general file IO.
 /// @}
 
+#include <time.h>
 #include "os_types.h"
 
 #if defined(__cplusplus) || defined(c_plusplus)

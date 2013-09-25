@@ -28,7 +28,13 @@ struct log_state
 	char log_buf[MAX_LOG_SIZE];
 };
 
+#ifdef thread_local
 extern thread_local log_state __state;
+#define __GET_LOG_STATE() (&__state)
+#else
+log_state* __get_log_state();
+#define __GET_LOG_STATE() __get_log_state()
+#endif
 
 // only convert unix timestamp to date and time (the first 6 fields in struct tm)
 void fast_localtime(int64_t unix_sec, struct tm* st);
@@ -55,8 +61,9 @@ void update_log_buf(int64_t timestamp_us, log_state& state);
 		using namespace sax::logger; \
 		/*log_header: "[20120822 11:34:27.456789][12345][TRACE][filename.cpp:123][func]"*/ \
 		int64_t now_us = g_now_us(); \
-		update_log_buf(now_us, __state); \
-		char* log_buf = __state.log_buf + LOG_TIME_LEN + LOG_TID_LEN; \
+		log_state* state = __GET_LOG_STATE(); \
+		update_log_buf(now_us, *state); \
+		char* log_buf = state->log_buf + LOG_TIME_LEN + LOG_TID_LEN; \
 		log_buf[0] = '['; \
 		memcpy(log_buf + 1, #level + 4, sizeof(#level) - 4 - 1); \
 		log_buf[1 + sizeof(#level) - 4 - 1] = ']'; \
@@ -69,10 +76,10 @@ void update_log_buf(int64_t timestamp_us, log_state& state);
 		log_buf[sizeof(func)-1 + 1] = ']'; \
 		log_buf += sizeof(func)-1 + 2; \
 		log_serializer serializer(log_buf, \
-				MAX_LOG_SIZE - (log_buf - __state.log_buf)); \
+				MAX_LOG_SIZE - (log_buf - state->log_buf)); \
 		size_t log_size = (int32_t) ((serializer << ' ' << x).end_of_line() - \
-				__state.log_buf); \
-		__logger->log(__state.log_buf, log_size); \
+				state->log_buf); \
+		__logger->log(state->log_buf, log_size); \
 	}
 #endif
 

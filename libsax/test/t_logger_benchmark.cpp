@@ -61,7 +61,7 @@ void* log(void* param)
 
 int main()
 {
-	const int threads = 8;
+	const int threads = 4;
 	volatile size_t counter[threads] = {0};
 	g_thread_t handles[threads];
 	for (int i=0; i<threads; i++) {

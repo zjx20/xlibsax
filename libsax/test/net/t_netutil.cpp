@@ -63,8 +63,8 @@ struct my_handler : public sax::transport_handler
 		}
 		buf->compact();
 
-		LOG_TRACE("close conn in biz. thread_id: " << g_thread_id() << " fd: " << tid.fd);
 #if !KEEP_ALIVE
+		LOG_TRACE("close conn in biz. thread_id: " << g_thread_id() << " fd: " << tid.fd);
 		_trans->close(tid);
 #endif
 	}
@@ -74,6 +74,7 @@ struct my_handler : public sax::transport_handler
 
 	virtual void on_closed(const sax::transport::id& tid, int err)
 	{
+		_trans->close(tid);
 		LOG_TRACE("close conn. thread_id: " << g_thread_id() << " fd: " << tid.fd << " errno: " << err);
 		//printf("conn closed. fd: %d errno: %d %s\n", tid.fd, err, strerror(err));
 		//finish = true;
@@ -110,7 +111,7 @@ int main(int argc, char* argv[])
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	INIT_GLOBAL_LOGGER("netutil_test.txt", 10, 100*1024*1024, sax::logger::SAX_OFF);
+	INIT_GLOBAL_LOGGER("netutil_test.txt", 10, 100*1024*1024, sax::logger::SAX_TRACE);
 
 	int thread_num = 1;
 
@@ -123,7 +124,7 @@ int main(int argc, char* argv[])
 	sax::transport trans;
 	my_handler* handler = new my_handler(&trans);
 
-	if (trans.init(11000, handler)) {
+	if (trans.init(1023, handler)) {
 		printf("transport inited.\n");
 		sax::transport::id tid;
 		if (trans.listen(NULL, 6543, 511, tid)) {

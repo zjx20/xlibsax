@@ -6,7 +6,7 @@ INC:=-I.. -I../.. -I../../..
 LIB:=-L.. -L../.. -lsax -lws2_32
 else
 INC:=-I../.. -I/usr/local/include -I/usr/local/include/thrift
-LIB:=-L../.. -L/usr/local/lib/gtest -lsax -lpthread -lgtest -lthrift
+LIB:=-L../.. -lsax -lpthread #-lgtest -lthrift
 endif
 
 CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP #-DLOG_OFF

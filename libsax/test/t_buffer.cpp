@@ -27,7 +27,7 @@ TEST(buffer, empty)
 	EXPECT_TRUE(buf.compact());
 
 	EXPECT_EQ(buffer::INVALID_VALUE, buf.remaining());
-	EXPECT_EQ(0, buf.data_length());
+	EXPECT_EQ(uint32_t(0), buf.data_length());
 
 	EXPECT_TRUE(buf.put(tmp, 0));
 	EXPECT_TRUE(buf.flip());

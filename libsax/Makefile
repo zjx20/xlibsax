@@ -46,7 +46,7 @@ endif
 ifdef WINDIR
 LIB = -lws2_32
 else
-CCFLAGS += -DHAVE_EPOLL
+#CCFLAGS += -DHAVE_EPOLL
 endif
 
 CXXFLAGS = $(CCFLAGS) -D__cplusplus 

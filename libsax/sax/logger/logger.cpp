@@ -16,6 +16,32 @@
 namespace sax {
 namespace logger {
 
+////////////////////////////////////////////////////////////////////
+
+#ifdef thread_local
+
+thread_local log_state __state = {0};
+
+#else
+
+#include <pthread.h>
+
+static pthread_key_t g_state_key;
+static int __dummy_for_init_key = pthread_key_create(&g_state_key, free);
+
+log_state* __get_log_state()
+{
+	log_state* state = (log_state*) pthread_getspecific(g_state_key);
+	if (UNLIKELY(state == NULL)) {
+		UNUSED_PARAMETER(__dummy_for_init_key);
+		state = (log_state*) malloc(sizeof(log_state));
+		pthread_setspecific(g_state_key, state);
+	}
+	return state;
+}
+#endif
+
+////////////////////////////////////////////////////////////////////
 
 log_file_writer<mutex_type>* __global_sync_logger =
 		new log_file_writer<mutex_type>("stdout",
@@ -41,14 +67,14 @@ bool init_global_sync_logger(const std::string& logfile_name,
 
 void destroy_global_sync_logger()
 {
+#ifndef thread_local
+	pthread_key_delete(g_state_key);
+#endif
+
 	if (__global_sync_logger != NULL) {
 		delete __global_sync_logger;
 	}
 }
-
-////////////////////////////////////////////////////////////////////
-
-thread_local log_state __state = {0};
 
 ////////////////////////////////////////////////////////////////////
 
@@ -128,11 +154,9 @@ void update_log_buf(int64_t timestamp_us, log_state& state)
 ////////////////////////////////////////////////////////////////////
 static int s_tz_offset = g_timezone() * 3600;
 
-#ifdef __isleap
 #undef __isleap
 #define __isleap(year) \
 	((year) % 4 == 0 && ((year) % 100 != 0 || (year) % 400 == 0))
-#endif//__isleap
 
 static const uint16_t __mon_yday[2][13] =
 {

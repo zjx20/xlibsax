@@ -49,7 +49,7 @@ int g_set_non_block(int fd)
 /// @brief for windows, using SIO_KEEPALIVE_VALS and WSAIoctl
 /// @note http://msdn.microsoft.com/en-us/library/dd877220(v=VS.85).aspx
 /// part of code is copied from MSTcpIP.h for independence
-int g_set_keepalive(int fd, int idle, int intvl, int probes)
+int g_set_keepalive(int fd, int idle, int intvl, int count)
 {
 	struct s_tcp_keepalive {
 	    u_long  onoff;
@@ -57,7 +57,7 @@ int g_set_keepalive(int fd, int idle, int intvl, int probes)
 	    u_long  keepaliveinterval;
 	};
 	
-	BOOL on = (idle>0 && intvl>0 && probes>0);
+	BOOL on = (idle>0 && intvl>0 && count>0);
 	if (on) {
 		struct s_tcp_keepalive val;
 		DWORD got = 0;
@@ -120,16 +120,22 @@ int g_set_non_block(int fd)
 	return 0;
 }
 
-int g_set_keepalive(int fd, int idle, int intvl, int probes)
+int g_set_keepalive(int fd, int idle, int intvl, int count)
 {
-	int on = (idle>0 && intvl>0 && probes>0);
+	int on = (idle>0 && intvl>0 && count>0);
 	
 	int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	if (ret != 0 || !on) return ret;
-	
+
+#ifdef __APPLE_CC__
+	// there is no way to set retry interval and retry times on mac OSX
+	ret = (0==setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle)));
+#else
 	ret = (0==setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) 
 		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl))
-		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &probes, sizeof(probes)));
+		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &count, sizeof(count)));
+#endif
+
 	if (ret) return 0;
 	
 	on = 0; // disable keepAlive when error
@@ -454,80 +460,138 @@ int g_eda_poll(g_eda_t* mgr, int msec)
 
 #else
 
-#error "select() based eda is not implement."
-
 /* Select()-based */
 #include <string.h>
 
-typedef struct aeApiState 
-{
-    fd_set rfds, wfds;
-    /* We need to have a copy of the fd sets as it's not 
+struct g_eda_t {
+	fd_set rfds, wfds, efds;
+
+    /* We need to have a copy of the fd sets as it's not
      * safe to reuse FD sets after select(). */
-    fd_set _rfds, _wfds;
-} aeApiState;
+	fd_set crfds, cwfds, cefds;
 
-static int aeApiCreate(g_eda_t *mgr) 
+	int         maxfd;
+	g_eda_func* proc;
+	void*       user_data;
+};
+
+g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
 {
-    aeApiState *state = malloc(sizeof(aeApiState));
+	if (maxfds > FD_SETSIZE) {
+		fprintf(stderr, "maxfds could not exceed FD_SETSIZE=%d.\n", FD_SETSIZE);
+		return NULL;
+	}
 
-    if (!state) return -1;
-    FD_ZERO(&state->rfds);
-    FD_ZERO(&state->wfds);
-    mgr->apidata = state;
-    return 0;
+	assert(maxfds > 0);
+
+	g_eda_t* h = malloc(sizeof(g_eda_t));
+	if (!h) return NULL;
+
+	FD_ZERO(&h->rfds);
+	FD_ZERO(&h->wfds);
+	FD_ZERO(&h->efds);
+
+	h->maxfd = 0;
+	h->proc = proc;
+	h->user_data = user_data;
+
+	return h;
 }
 
-static void aeApiFree(g_eda_t *mgr) 
+void g_eda_close(g_eda_t* mgr)
 {
-    free(mgr->apidata);
+	assert(mgr);
+	free(mgr);
 }
 
-static int aeApiAddEvent(g_eda_t *mgr, int fd, int mask) 
+int g_eda_add(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    if (fd >= FD_SETSIZE) return -1;
+	if (UNLIKELY(fd > FD_SETSIZE)) return -1;
 
-    if (mask & EDA_READ) FD_SET(fd,&state->rfds);
-    if (mask & EDA_WRITE) FD_SET(fd,&state->wfds);
-    return 0;
+	assert(fd >= 0);
+
+	if (mask & EDA_READ) FD_SET(fd, &mgr->rfds);
+	if (mask & EDA_WRITE) FD_SET(fd, &mgr->wfds);
+	FD_SET(fd, &mgr->efds);
+
+	if (mgr->maxfd < fd) mgr->maxfd = fd;
+
+	return 0;
 }
 
-static void aeApiDelEvent(g_eda_t *mgr, int fd, int mask) 
+int g_eda_del(g_eda_t* mgr, int fd)
 {
-    aeApiState *state = mgr->apidata;
-    if (fd >= FD_SETSIZE) return;
+	if (UNLIKELY(fd > FD_SETSIZE)) return -1;
 
-    if (mask & EDA_READ) FD_CLR(fd,&state->rfds);
-    if (mask & EDA_WRITE) FD_CLR(fd,&state->wfds);
+	assert(fd >= 0);
+
+	FD_CLR(fd, &mgr->rfds);
+	FD_CLR(fd, &mgr->wfds);
+	FD_CLR(fd, &mgr->efds);
+
+	if (mgr->maxfd == fd) {
+		int j = fd - 1;
+		do {
+			if (FD_ISSET(j, &mgr->efds)) break;
+			--j;
+		} while (j > 0);
+
+		mgr->maxfd = j;
+	}
+
+	return 0;
 }
 
-static int aeApiPoll(g_eda_t *mgr, struct timeval *tvp) 
+void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    int retval, j, numevents = 0;
+	if (UNLIKELY(fd > FD_SETSIZE)) return;
 
-    memcpy(&state->_rfds,&state->rfds,sizeof(fd_set));
-    memcpy(&state->_wfds,&state->wfds,sizeof(fd_set));
+	assert(fd >= 0 && FD_ISSET(fd, &mgr->efds));
 
-    retval = select(mgr->maxfd+1,
-                &state->_rfds,&state->_wfds,NULL,tvp);
+	if ((mask & EDA_READ) ^ FD_ISSET(fd, &mgr->rfds)) {
+		if (mask & EDA_READ) FD_SET(fd, &mgr->rfds);
+		else FD_CLR(fd, &mgr->rfds);
+	}
+
+	if ((mask & EDA_WRITE) ^ FD_ISSET(fd, &mgr->wfds)) {
+		if (mask & EDA_WRITE) FD_SET(fd, &mgr->wfds);
+		else FD_CLR(fd, &mgr->wfds);
+	}
+}
+
+int g_eda_poll(g_eda_t* mgr, int msec)
+{
+	struct timeval tv;
+	tv.tv_sec = msec / 1000;
+	tv.tv_usec = msec % 1000 * 1000;
+
+    memcpy(&mgr->crfds,&mgr->rfds,sizeof(fd_set));
+    memcpy(&mgr->cwfds,&mgr->wfds,sizeof(fd_set));
+    memcpy(&mgr->cefds,&mgr->efds,sizeof(fd_set));
+
+    int retval = select(mgr->maxfd + 1,
+    		&mgr->crfds, &mgr->cwfds, &mgr->cefds, &tv);
+    int count = 0;
     if (retval > 0) {
+    	int j;
         for (j = 0; j <= mgr->maxfd; j++) {
             int mask = 0;
-            aeFileEvent *fe = &mgr->events[j];
 
-            if (fe->mask == EDA_NONE) continue;
-            if (fe->mask & EDA_READ && FD_ISSET(j,&state->_rfds))
-                mask |= EDA_READ;
-            if (fe->mask & EDA_WRITE && FD_ISSET(j,&state->_wfds))
-                mask |= EDA_WRITE;
-            mgr->fired[numevents].fd = j;
-            mgr->fired[numevents].mask = mask;
-            numevents++;
+            if (!FD_ISSET(j, &mgr->efds)) continue;	// a fd always in efds if it has not been deleted
+            if (FD_ISSET(j, &mgr->rfds) && FD_ISSET(j, &mgr->crfds))
+            	mask |= EDA_READ;
+            if (FD_ISSET(j, &mgr->wfds) && FD_ISSET(j, &mgr->cwfds))
+            	mask |= EDA_WRITE;
+            if (FD_ISSET(j, &mgr->cefds))
+            	mask |= EDA_ERROR;
+
+            count++;
+
+            mgr->proc(mgr, j, mgr->user_data, mask);
         }
     }
-    return numevents;
+
+	return count;
 }
 #endif
 

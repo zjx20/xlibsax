@@ -40,7 +40,7 @@ void g_close_socket(int fd);
 
 int g_set_non_block(int fd);
 int g_set_linger(int fd, int onoff, int linger);
-int g_set_keepalive(int fd, int idle, int intvl, int probes); // seconds
+int g_set_keepalive(int fd, int idle, int intvl, int count); // seconds
 
 // An event-driven programming library for event-loop
 #define EDA_NONE 0
