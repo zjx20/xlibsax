@@ -72,6 +72,8 @@ public:
 			return tobj;
 		}
 
+		// FIXME: should wait for the new thread to complete accessing
+		//        the param variable, before delete it.
 		delete[] param;
 		delete tobj;
 		return NULL;

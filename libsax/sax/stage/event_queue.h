@@ -206,8 +206,8 @@ private:
 	char* _buf;
 	spin_type _lock;
 	int32_t _cap;
-	int32_t _alloc_pos;
-	int32_t _free_pos;
+	volatile int32_t _alloc_pos;
+	volatile int32_t _free_pos;
 };
 
 } // namespace sax
