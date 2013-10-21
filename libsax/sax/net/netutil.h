@@ -134,7 +134,7 @@ struct transport_handler
 	virtual ~transport_handler() {}
 
 	virtual void on_accepted(const transport::id& new_conn,
-			const transport::id& from) = 0;
+			const transport::id& from, uint32_t ip_n, uint16_t port_h) = 0;
 	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) = 0;
 	virtual void on_tcp_recieved(const transport::id& tid, linked_buffer* buf) = 0;
 	virtual void on_udp_recieved(const transport::id& tid, const char* data,

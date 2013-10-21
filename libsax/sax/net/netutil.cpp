@@ -296,7 +296,7 @@ bool transport::handle_tcp_write(transport* trans, int fd, context& ctx)
 	uint32_t total_send = 0;
 
 	while(buf->remaining()) {
-		uint32_t len;
+		uint32_t len = 0;
 		char* buf_ptr = buf->direct_get(len);
 
 		int ret = g_tcp_write(fd, buf_ptr, len);
@@ -551,7 +551,7 @@ bool transport::handle_tcp_accept(transport* trans, int fd)
 					trans->add_fd(accepted_fd, EDA_READ, ip_n, port_h,
 							context::TCP_CONNECTION))) {
 				trans->_handler->on_accepted(trans->_ctx[accepted_fd].tid,
-						trans->_ctx[fd].tid);
+						trans->_ctx[fd].tid, ip_n, port_h);
 			}
 			else {
 				// accpeted_fd exceed maxfds

@@ -1,6 +1,7 @@
 #ifndef __LINKED_LIST_H__
 #define __LINKED_LIST_H__
 
+#include <stdlib.h>
 #include "nocopy.h"
 
 namespace sax {
@@ -12,6 +13,21 @@ namespace sax {
 /// 	NodeT *_next;
 /// };
 /// </pre>
+///
+/// or you can declare linkedlist as a friend class of the node type
+/// <pre>
+/// class NodeT  {
+/// private:
+///     friend class sax::linkedlist<NodeT>;
+/// 	NodeT *_prev;
+/// 	NodeT *_next;
+/// };
+/// </pre>
+///
+/// NOTE: sax::linkedlist isn't a replacement of std::list.
+///       it is a encapsulation of linked list algorithm,
+///       and it DOSN"T do anything about memory management.
+///
 
 template <typename NodeT>
 class linkedlist : public nocopy
@@ -23,6 +39,8 @@ public:
 	linkedlist();
 	void push_back(NodeT* node);
 	void push_front(NodeT* node);
+	NodeT* pop_back();
+	NodeT* pop_front();
 	void erase(NodeT* node);
 	void splice(bool before, NodeT *dst, NodeT *src);
 	void merge(const linkedlist<NodeT>& al);
@@ -85,6 +103,40 @@ void linkedlist<NodeT>::push_front(NodeT* node)
 		_head->_prev = node;
 	}
 	_head = node;
+}
+
+template <typename NodeT>
+NodeT* linkedlist<NodeT>::pop_back()
+{
+	if (!_tail) return NULL;
+
+	NodeT* node = _tail;
+	if (_head != _tail) {
+		_tail->_prev->_next = NULL;
+		_tail = _tail->_prev;
+	}
+	else {
+		_head = _tail = NULL;
+	}
+
+	return node;
+}
+
+template <typename NodeT>
+NodeT* linkedlist<NodeT>::pop_front()
+{
+	if (!_head) return NULL;
+
+	NodeT* node = _head;
+	if (_head != _tail) {
+		_head->_next->_prev = NULL;
+		_head = _head->_next;
+	}
+	else {
+		_head = _tail = NULL;
+	}
+
+	return node;
 }
 
 template <typename NodeT>

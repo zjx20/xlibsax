@@ -43,7 +43,7 @@ TEST(linked_list, push_pop)
 
 	for(size_t i=0;i<ARRAY_SIZE(arr);i++) {
 		A* tmp = l.pop_front();
-		EXPECT_EQ(i, tmp->a);
+		EXPECT_EQ((int)i, tmp->a);
 	}
 
 	////////////////////////////////////////
@@ -87,10 +87,10 @@ TEST(buffer, empty)
 
 	EXPECT_FALSE(buf.get(tmp, 1));
 
-	EXPECT_EQ(BLOCK_SIZE/*alloc one block in constructor*/, buf.capacity());
-	EXPECT_EQ(0, buf.position());
+	EXPECT_EQ((uint32_t)BLOCK_SIZE/*alloc one block in constructor*/, buf.capacity());
+	EXPECT_EQ(0u, buf.position());
 
-	EXPECT_EQ(0, buf.remaining());
+	EXPECT_EQ(0u, buf.remaining());
 	EXPECT_EQ(linked_buffer::INVALID_VALUE, buf.data_length());
 
 	EXPECT_FALSE(buf.peek(tmp[0]));
@@ -116,7 +116,7 @@ TEST(buffer, writing_mode)
 
 	EXPECT_TRUE(buf.flip());
 
-	EXPECT_EQ(0, buf.position());
+	EXPECT_EQ(0u, buf.position());
 
 	EXPECT_TRUE(buf.compact());
 

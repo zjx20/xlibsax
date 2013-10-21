@@ -43,7 +43,7 @@ struct my_handler : public sax::transport_handler
 	}
 
 	virtual void on_accepted(const sax::transport::id& new_conn,
-			const sax::transport::id& from)
+			const sax::transport::id& from, uint32_t ip_n, uint16_t port_h)
 	{
 		//static ip_buf[20];
 		//printf("new conn: %s:%d fd: %d\n", g_inet_ntoa(new_conn));
