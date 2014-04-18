@@ -2101,7 +2101,6 @@ void g_mutex_enter(g_mutex_t *p)
 			if (ret == 0) break;                      \
 			now_us = g_now_us();                      \
 		} while (now_us - start_us < interval);       \
-		ret = 1;                                      \
 	} while(0)
 #endif
 
