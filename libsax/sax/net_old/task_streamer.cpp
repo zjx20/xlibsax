@@ -39,7 +39,7 @@ void task_streamer::on_data_read(connection_base *conn, buffer &read) {
 //            read.get(flag);
 //            a_task.is_timeout = flag & 1;
 //            a_task.is_sended = flag & (1 << 1);
-//            a_task.is_recieved = flag & (1 << 2);
+//            a_task.is_received = flag & (1 << 2);
 //            get buffer,lenth = task_len - 8(uint64_t) - 4(uint32_t)
 //             - 1(parameter set) - 1(result set);
             if(!read.get(a_task.data, task_len - 13)) {
@@ -84,7 +84,7 @@ int task_streamer::on_data_write(connection_base *conn, void *data, buffer &writ
             + ((a_task->is_finish)?((1 << 2)):0) + ((a_task->is_thrift_data)?((1 << 3)):0);
     write.put(flag);
 //    flag = (1 & a_task->is_timeout) + ((1 << 1) & a_task->is_sended) +
-//            ((1 << 2) & a_task->is_recieved);
+//            ((1 << 2) & a_task->is_received);
 //    write.put(flag);
     write.put(a_task->data, a_task->data.remaining());
 
@@ -141,7 +141,7 @@ void task_streamer::on_response_task_back(uint64_t conn_id, task &a_task) {
     }
     task_state &state = _conn_task_map[conn_id][a_task.trans_key];
     a_task.is_sended = true;
-    a_task.is_recieved = true;
+    a_task.is_received = true;
 
     ///TODO check the time
     a_task.is_timeout = state.start_time == 0;
@@ -153,7 +153,7 @@ void task_streamer::on_connection_closed(connection_base *conn) {
 	conn_task_map::iterator it = _conn_task_map.find(conn->_conn_id);
 	if(it == _conn_task_map.end()) return;
 	task a_task;
-	a_task.is_recieved = false;
+	a_task.is_received = false;
 	a_task.is_finish = false;
 	a_task.conn = conn;
 	for(task_state_map::iterator it2 = it->second.begin();

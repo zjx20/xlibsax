@@ -143,7 +143,7 @@ void task_streamer::on_response_task_back(uint64_t conn_id, task *a_task) {
     }
     task_state &state = _conn_task_map[conn_id][a_task->trans_key];
     a_task->is_sended = true;
-    a_task->is_recieved = true;
+    a_task->is_received = true;
 
     ///TODO check the time
     a_task->is_timeout = state.start_time == 0;
@@ -155,7 +155,7 @@ void task_streamer::on_connection_closed(connection_base *conn) {
 	conn_task_map::iterator it = _conn_task_map.find(conn->_conn_id);
 	if(it == _conn_task_map.end()) return;
 	task *a_task = new task();
-	a_task->is_recieved = false;
+	a_task->is_received = false;
 	a_task->is_finish = false;
 	a_task->conn = conn;
 	for(task_state_map::iterator it2 = it->second.begin();

@@ -51,7 +51,7 @@ struct my_handler : public sax::transport_handler
 		LOG_TRACE("new conn. thread_id: " << g_thread_id() << " fd: " << new_conn.fd);
 	}
 
-	virtual void on_tcp_recieved(const sax::transport::id& tid, sax::linked_buffer* buf)
+	virtual void on_tcp_received(const sax::transport::id& tid, sax::linked_buffer* buf)
 	{
 		char temp[1024];
 		while (buf->remaining()) {
@@ -69,7 +69,7 @@ struct my_handler : public sax::transport_handler
 #endif
 	}
 
-	virtual void on_udp_recieved(const sax::transport::id& tid,
+	virtual void on_udp_received(const sax::transport::id& tid,
 			const char* data, size_t length, uint32_t ip_n, uint16_t port_h) {}
 
 	virtual void on_closed(const sax::transport::id& tid, int err)

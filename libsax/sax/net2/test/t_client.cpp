@@ -31,7 +31,7 @@ public:
         LOG(INFO,"task.is_finish  :  %d\n",a_task->is_finish);
         LOG(INFO,"task.is_timeout  :  %d\n",a_task->is_timeout);
         LOG(INFO,"task.is_sended  :  %d\n",a_task->is_sended);
-        LOG(INFO,"task.is_recieved  :  %d\n",a_task->is_recieved);
+        LOG(INFO,"task.is_received  :  %d\n",a_task->is_received);
         switch(a_task->type) {
         case test::TType::T_TEST_RES:
         {

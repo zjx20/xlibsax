@@ -22,7 +22,7 @@ struct task_state {
 struct task {
     task() : trans_key(0), type(0),
             is_call(false), is_need_response(false), is_finish(false),
-            is_timeout(false), is_sended(false), is_recieved(false),
+            is_timeout(false), is_sended(false), is_received(false),
             data(dynamic_cast<sax::memory_pool*>(memory_pool_factory::get_instance())),
             obj(NULL), conn(NULL)
             {}
@@ -39,7 +39,7 @@ struct task {
     //one byte for result set
     bool is_timeout;
     bool is_sended;
-    bool is_recieved;
+    bool is_received;
 
     //data
     buffer data;

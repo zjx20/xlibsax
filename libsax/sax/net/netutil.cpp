@@ -470,7 +470,7 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 
 			if (buf->data_length() > 0) {
 				buf->flip();
-				trans->_handler->on_tcp_recieved(ctx.tid, buf);
+				trans->_handler->on_tcp_received(ctx.tid, buf);
 			}
 
 			id tid = ctx.tid;
@@ -485,7 +485,7 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 
 		if (buf->data_length() > 0) {
 			buf->flip();
-			trans->_handler->on_tcp_recieved(ctx.tid, buf);
+			trans->_handler->on_tcp_received(ctx.tid, buf);
 		}
 
 		id tid = ctx.tid;
@@ -502,7 +502,7 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 
 			if (buf->data_length() > 0) {
 				buf->flip();
-				trans->_handler->on_tcp_recieved(ctx.tid, buf);
+				trans->_handler->on_tcp_received(ctx.tid, buf);
 			}
 
 			id tid = ctx.tid;
@@ -515,11 +515,11 @@ bool transport::handle_tcp_read(transport* trans, int fd, context& ctx)
 
 	buf->flip();
 
-	trans->_handler->on_tcp_recieved(ctx.tid, buf);
+	trans->_handler->on_tcp_received(ctx.tid, buf);
 
-	// connection may be closed by on_tcp_recieved(), so check ctx.tid.seq != -1
+	// connection may be closed by on_tcp_received(), so check ctx.tid.seq != -1
 	if (UNLIKELY(ctx.tid.seq != -1 && buf->data_length() == linked_buffer::INVALID_VALUE)) {
-		LOG_ERROR("buf->compact() must be called in on_tcp_recieved().\n");
+		LOG_ERROR("buf->compact() must be called in on_tcp_received().\n");
 		assert(0);
 	}
 
@@ -591,7 +591,7 @@ bool transport::handle_udp_read(transport* trans, int fd, context& ctx)
 				LOG_WARN("recv a large udp packet, dropped. len: " << ret);
 				continue;
 			}
-			trans->_handler->on_udp_recieved(ctx.tid, temp, ret, ip_n, port_h);
+			trans->_handler->on_udp_received(ctx.tid, temp, ret, ip_n, port_h);
 		}
 		else {
 			if (errno == EAGAIN || errno == EWOULDBLOCK ||
