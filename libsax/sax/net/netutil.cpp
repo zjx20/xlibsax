@@ -650,8 +650,6 @@ bool transport::has_outdata(const id& tid)
 	}
 
 	linked_buffer*& write_buf = _ctx[tid.fd].write_buf;
-	if (write_buf == NULL) printf("write_buf == NULL\n");
-	else printf("write_buf->position(): %d\n", write_buf->position());
 	if (write_buf == NULL || write_buf->position() == 0) return false;
 	return true;
 }
