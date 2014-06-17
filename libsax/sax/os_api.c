@@ -2089,7 +2089,11 @@ void g_mutex_enter(g_mutex_t *p)
 #endif // PTHREAD_MUTEX_RECURSIVE
 }
 
-#ifdef __APPLE_CC__
+
+#if defined(__APPLE_CC__) || defined(__ANDROID__)
+#define NO_PTHREAD_MUTEX_TIMEDLOCK 1
+#endif
+
 #define TIMED_LOCK(trylock, sec, ret) \
 	do { \
 		int64_t interval = (int64_t) (sec * 1000000); \
@@ -2102,7 +2106,6 @@ void g_mutex_enter(g_mutex_t *p)
 			now_us = g_now_us();                      \
 		} while (now_us - start_us < interval);       \
 	} while(0)
-#endif
 
 static int exec_try_lock(pthread_mutex_t *mt, double sec)
 {
@@ -2110,7 +2113,7 @@ static int exec_try_lock(pthread_mutex_t *mt, double sec)
 	if (0 == ret) return 0;
 
 	if (sec > 0) {
-#ifdef __APPLE_CC__
+#ifdef NO_PTHREAD_MUTEX_TIMEDLOCK
 		TIMED_LOCK(pthread_mutex_trylock(mt), sec, ret);
 #else
 		struct timespec ts;

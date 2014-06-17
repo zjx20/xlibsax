@@ -100,6 +100,8 @@ public:
 
 	inline int32_t maxfds() {return _maxfds;}
 
+	bool has_outdata(const id& tid);
+
 private:
 
 	bool add_fd(int fd, int eda_mask, const char* addr, uint16_t port_h,

@@ -332,14 +332,14 @@ bool transport::handle_tcp_write(transport* trans, int fd, context& ctx)
 		// else: io buffer is full, wait for next time
 	}
 
-	trans->_handler->on_tcp_send(ctx.tid, total_send);
-
 	if (buf->remaining() == 0) {
 		// nothing to send, turn off EDA_WRITE
 		trans->toggle_write(fd, false);
 	}
 
 	buf->compact();
+
+	trans->_handler->on_tcp_send(ctx.tid, total_send);
 
 	return true;
 }
@@ -385,7 +385,7 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 		int ret = g_tcp_write(tid.fd, buf, length);
 		if (LIKELY(ret >= 0)) {
 			if (UNLIKELY(ret < length)) {
-				write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+				if (write_buf == NULL) write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
 
 				// put the rest of data to write buffer, send it next time
 				if (UNLIKELY(write_buf->put((uint8_t*) buf + ret,
@@ -415,6 +415,8 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 				return false;
 			}
 			else {
+				if (write_buf == NULL) write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+
 				// io buffer is full
 				if (UNLIKELY(write_buf->put((uint8_t*) buf, length) == false)) {
 					// no memory for writing
@@ -638,6 +640,20 @@ bool transport::send_udp(uint32_t dest_ip_n, uint16_t dest_port_h,
 	if (UNLIKELY(length < 0)) return false;
 	// send it directly
 	return g_udp_write2(-1, buf, length, dest_ip_n, dest_port_h) != -1;
+}
+
+bool transport::has_outdata(const id& tid)
+{
+	if (UNLIKELY(_ctx[tid.fd].type != context::TCP_CONNECTION ||
+			!(_ctx[tid.fd].tid == tid))) {
+		return false;
+	}
+
+	linked_buffer*& write_buf = _ctx[tid.fd].write_buf;
+	if (write_buf == NULL) printf("write_buf == NULL\n");
+	else printf("write_buf->position(): %d\n", write_buf->position());
+	if (write_buf == NULL || write_buf->position() == 0) return false;
+	return true;
 }
 
 } // namespace sax

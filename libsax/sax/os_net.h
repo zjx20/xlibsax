@@ -12,6 +12,8 @@ extern "C" {
 int g_net_start();
 void g_net_clean();
 
+int g_fd_setsize();
+
 // convert hostname or ip string to network byte order uint32_t ip
 int g_inet_aton(const char* addr, uint32_t* ip);
 // convert network byte order uint32_t ip to ip string, thread safe
@@ -27,6 +29,7 @@ int g_tcp_listen(const char *addr, int port, int backlog);
 
 int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h);
 int g_tcp_connect(const char *addr, int port, int non_block);
+int g_tcp_connect_block(const char *addr, int port, int timeout_ms);
 int g_tcp_read(int fd, void *buf, size_t count);
 int g_tcp_write(int fd, const void *buf, size_t count);
 

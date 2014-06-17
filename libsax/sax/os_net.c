@@ -10,7 +10,7 @@
 #if defined(WIN32) || defined(_WIN32)
 
 #undef FD_SETSIZE
-#define FD_SETSIZE 1024 
+#define FD_SETSIZE 2048
 
 #include <winsock2.h>
 #include <windows.h>
@@ -152,6 +152,11 @@ int g_tcp_read(int fd, void *buf, size_t count)
 
 //-------------------------------------------------------------------------
 
+int g_fd_setsize()
+{
+    return FD_SETSIZE;
+}
+
 int g_inet_aton(const char* addr, uint32_t* ip)
 {
 	if (inet_aton(addr, (struct in_addr*) ip) == 0)
@@ -279,6 +284,67 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 
 quit:
 	CLOSE_SOCKET(fd); return -1;
+}
+
+int g_tcp_connect_block(const char *addr, int port, int timeout_ms)
+{
+    int fd, on = 1;
+    struct sockaddr_in sa;
+
+    if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        return -1;
+    }
+
+    if (g_set_non_block(fd) != 0) goto quit;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+        (const char *) &on, sizeof(on)) == -1) goto quit;
+
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
+        (const char *) &on, sizeof(on)) == -1) goto quit;
+
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons((u_short)port);
+
+    if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
+
+    if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
+#if !defined(WIN32) && !defined(_WIN32)
+        if (errno != EINPROGRESS) goto quit;
+#endif
+
+        struct timeval tm;
+        tm.tv_sec  = timeout_ms / 1000;
+        tm.tv_usec = (timeout_ms % 1000) * 1000;
+
+        fd_set rset, wset, eset;
+        FD_ZERO(&rset);
+        FD_SET(fd, &rset);
+
+        FD_ZERO(&wset);
+        FD_SET(fd, &wset);
+
+        FD_ZERO(&eset);
+        FD_SET(fd, &eset);
+
+        if (select(fd + 1, &rset, &wset, &eset, &tm) > 0) {
+            int len=sizeof(int);
+            int err = -1;
+            getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, (socklen_t*)&len);
+            if(err != 0) goto quit;
+            if (FD_ISSET(fd, &eset)) goto quit;
+        }
+        else {
+            // timeout
+            goto quit;
+        }
+
+    }
+
+    return fd;
+
+quit:
+    CLOSE_SOCKET(fd); return -1;
 }
 
 int g_tcp_write(int fd, const void *buf, size_t count)
