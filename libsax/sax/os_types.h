@@ -41,34 +41,36 @@
 
 
 #ifndef IS_LITTLE_ENDIAN
-#if (defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && \
-		__BYTE_ORDER == __LITTLE_ENDIAN) || \
-	(defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && \
-		__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || \
-	defined(i386) || defined(__i386__) || \
-	defined(__i486__) || \
-	defined(__i586__) || defined(__i686__) || \
-	defined(__ia64) || defined(__ia64__) || \
-	defined(_M_IX86) || defined(_M_IA64) || \
-	defined(_M_ALPHA) || defined(__amd64) || \
-	defined(__amd64__) || defined(_M_AMD64) || \
-	defined(__x86_64) || defined(__x86_64__) || \
-	defined(_M_X64) || defined(__bfin__) || \
-	defined(vax) || \
-	defined(MIPSEL) || defined(_MIPSEL) || \
-	defined(ns32000) || \
-	defined(sun386) || \
-	defined(BIT_ZERO_ON_RIGHT) || \
-	defined(__alpha__) || defined(__alpha)
-#define IS_LITTLE_ENDIAN 1
-#else
-#ifdef _MSC_VER
-#pragma message("WARNING: Cannot detect byte order for this target, \
-	please specify it by defining macro IS_LITTLE_ENDIAN .")
-#else
-#warning "Cannot detect byte order for this target, \
-	please specify it by defining macro IS_LITTLE_ENDIAN ."
-#endif
+    #if (defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && \
+            __BYTE_ORDER == __LITTLE_ENDIAN) || \
+        (defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && \
+            __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || \
+        defined(i386) || defined(__i386__) || \
+        defined(__i486__) || \
+        defined(__i586__) || defined(__i686__) || \
+        defined(__ia64) || defined(__ia64__) || \
+        defined(_M_IX86) || defined(_M_IA64) || \
+        defined(_M_ALPHA) || defined(__amd64) || \
+        defined(__amd64__) || defined(_M_AMD64) || \
+        defined(__x86_64) || defined(__x86_64__) || \
+        defined(_M_X64) || defined(__bfin__) || \
+        defined(vax) || \
+        defined(MIPSEL) || defined(_MIPSEL) || \
+        defined(ns32000) || \
+        defined(sun386) || \
+        defined(BIT_ZERO_ON_RIGHT) || \
+        defined(__alpha__) || defined(__alpha)
+
+        #define IS_LITTLE_ENDIAN 1
+    #else
+        #ifdef _MSC_VER
+        #pragma message("WARNING: Cannot detect byte order for this target, \
+            please specify it by defining macro IS_LITTLE_ENDIAN .")
+        #else
+        #warning "Cannot detect byte order for this target, \
+            please specify it by defining macro IS_LITTLE_ENDIAN ."
+        #endif
+    #endif
 #endif//IS_LITTLE_ENDIAN
 
 
