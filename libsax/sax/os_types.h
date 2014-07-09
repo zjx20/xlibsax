@@ -61,6 +61,7 @@
 	defined(BIT_ZERO_ON_RIGHT) || \
 	defined(__alpha__) || defined(__alpha)
 #define IS_LITTLE_ENDIAN 1
+#else
 #ifdef _MSC_VER
 #pragma message("WARNING: Cannot detect byte order for this target, \
 	please specify it by defining macro IS_LITTLE_ENDIAN .")
