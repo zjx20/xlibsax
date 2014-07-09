@@ -261,7 +261,7 @@ void transport::eda_callback(g_eda_t* mgr, int fd, void* user_data, int mask)
 		}
 		else if (ctx.type == context::TCP_CONNECTION) {
 			// the connection may already be closed by handle_tcp_write()
-			if (UNLIKELY(_ctx[fd].tid.seq == -1)) return;
+			if (UNLIKELY(ctx.tid.seq == -1)) return;
 			handle_tcp_read(trans, fd, ctx);
 		}
 		else if (ctx.type == context::UDP_BIND) {
