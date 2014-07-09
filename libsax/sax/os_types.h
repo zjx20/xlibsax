@@ -61,10 +61,12 @@
 	defined(BIT_ZERO_ON_RIGHT) || \
 	defined(__alpha__) || defined(__alpha)
 #define IS_LITTLE_ENDIAN 1
+#ifdef _MSC_VER
+#pragma message("WARNING: Cannot detect byte order for this target, \
+	please specify it by defining macro IS_LITTLE_ENDIAN .")
 #else
-#warning "is your target use big endian? you can define the macro IS_LITTLE_ENDIAN to handle this warning, \
-or just ignore it if you sure what you are doing."
-#define IS_LITTLE_ENDIAN 0
+#warning "Cannot detect byte order for this target, \
+	please specify it by defining macro IS_LITTLE_ENDIAN ."
 #endif
 #endif//IS_LITTLE_ENDIAN
 
