@@ -87,6 +87,55 @@ TEST(linkedlist, push)
 	}
 }
 
+TEST(linkedlist, pop)
+{
+	sax::linkedlist<TestStruct> list;
+
+	TestStruct* tmp;
+	TestStruct* tmp2;
+
+	tmp = new TestStruct();
+	tmp->data = 3;
+	list.push_back(tmp);
+
+	tmp2 = list.pop_front();
+	EXPECT_EQ(3, tmp2->data);
+	EXPECT_TRUE(list.empty());
+
+	list.push_back(tmp2);
+
+	tmp = new TestStruct();
+	tmp->data = 4;
+	list.push_back(tmp);
+
+	tmp2 = list.pop_front();
+	EXPECT_EQ(3, tmp2->data);
+
+	list.push_front(tmp2);
+
+	tmp2 = list.pop_back();
+	EXPECT_EQ(4, tmp2->data);
+
+	EXPECT_EQ(list.head(), list.tail());
+
+	list.push_back(tmp2);
+
+	tmp = new TestStruct();
+	tmp->data = 5;
+	list.push_back(tmp);
+
+	tmp2 = list.pop_back();
+	EXPECT_EQ(5, tmp2->data);
+	list.push_front(tmp2);
+
+	int expect[] = {3, 4, 5};
+	int count = 0;
+	while(!(tmp2 = list.pop_back())) {
+		EXPECT_EQ(expect[count++], tmp2->data);
+		delete tmp2;
+	}
+}
+
 TEST(linkedlist, erase)
 {
 	sax::linkedlist<TestStruct> list;

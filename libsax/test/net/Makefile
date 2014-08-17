@@ -21,6 +21,9 @@ ifdef PROFILE
 CCFLAGS += -pg
 endif
 
+t_http: t_http.cpp ../../libsax.a http_parser.h http_parser.c
+	$(CXX) $(CCFLAGS) -o $@ t_http.cpp http_parser.c $(INC) $(LIB)
+
 %: %.cpp ../../libsax.a
 	$(CXX) $(CCFLAGS) -o $@ $< $(INC) $(LIB)
 
