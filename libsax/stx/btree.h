@@ -32,6 +32,7 @@
 #include <istream>
 #include <ostream>
 #include <assert.h>
+#include <cstddef>
 
 // *** Debugging Macros
 

@@ -2,65 +2,77 @@
 #define __FIFO_H_QS__
 
 /**
- * a thread-safe fifo queue implemented by array
+ * a thread-safe fifo queue
  */
 
-#include <sax/sysutil.h>
+#include "sax/sysutil.h"
+#include "sax/os_api.h"
+#include "sax/compiler.h"
 #include "nocopy.h"
 
 namespace sax {
 
-template<class T>
+template <typename T>
 class fifo : public nocopy
 {
 public:
-	inline fifo(uint32_t cap=1024):
-		_cap(cap), _wsem(cap, cap), _rsem(cap, 0)
+	inline fifo(uint32_t cap = 1024) :
+		_cap(cap), _hsem(_cap, 0), _tsem(_cap, _cap)
 	{
-		_msg = new T[cap];
-		_wid = _rid = 0;
+		_head = _tail = 0;
+		_queue = new T[_cap];
 	}
-	inline ~fifo() 
+
+	inline ~fifo()
 	{
-		delete[] _msg;
+		delete[] _queue;
 	}
-	bool push_back(const T &one, double sec)
+
+	bool push_back(const T &one, double sec = 0)
 	{
-		if (_wsem.wait(sec))
-		{
-			auto_mutex lock(&_wmtx);
-			_msg[_wid++] = one;
-			if (_wid >= _cap) _wid = 0;
-			_rsem.post();
+		if (_tsem.wait(sec)) {
+			_tlock.enter();
+			_queue[_tail++] = one;
+			if (UNLIKELY(_tail >= _cap)) _tail = 0;
+			_tlock.leave();
+
+			_hsem.post();
+
 			return true;
 		}
-		return false;
-	}
-	bool pop_front(T &one, double sec)
-	{
-		if (_rsem.wait(sec))
-		{
-			auto_mutex lock(&_rmtx);
-			one = _msg[_rid++];
-			if (_rid >= _cap) _rid = 0;
-			_wsem.post();
-			return true;
-		}
+
 		return false;
 	}
 
-protected:
-	T *_msg; ///> container
-	uint32_t _cap; ///> size
-	
-	uint32_t _wid; ///> cursor for writing
-	uint32_t _rid; ///> cursor for reading
+	// sec < 0 wait forever; sec = 0 return immediately; sec > 0 wait sec seconds
+	bool pop_front(T &one, double sec = 0)
+	{
+		if (_hsem.wait(sec)) {
+			_hlock.enter();
+			one = _queue[_head++];
+			if (UNLIKELY(_head >= _cap)) _head = 0;
+			_hlock.leave();
+
+			_tsem.post();
+
+			return true;
+		}
+
+		return false;
+	}
+
+	uint32_t get_capacity() { return _cap; }
 
 private:
-	mutex_type _wmtx;
-	mutex_type _rmtx;
-	sema_type  _wsem;
-	sema_type  _rsem;
+	uint32_t _cap;
+	T* _queue;
+	volatile uint32_t _head;
+	volatile uint32_t _tail;
+
+	sema_type _hsem;
+	sema_type _tsem;
+	spin_type _hlock;
+	spin_type _tlock;
 };
 
 } //namespace

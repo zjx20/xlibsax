@@ -2,12 +2,18 @@ TARGET = libsax.a
 
 OBJS = $(patsubst %.c,%.o,$(wildcard sax/*.c))
 OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/*.cpp))
+OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/stage/*.cpp))
+OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/logger/*.cpp))
+OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/net/*.cpp))
 OBJS+= $(patsubst %.cpp,%.o,$(wildcard sax/xml/*.cpp))
 
 HDRS = $(wildcard stx/*.h)
 HDRS+= $(wildcard sax/*.h)
 HDRS+= $(wildcard sax/win32/*.h)
 HDRS+= $(wildcard sax/c++/*.h)
+HDRS+= $(wildcard sax/stage/*.h)
+HDRS+= $(wildcard sax/logger/*.h)
+HDRS+= $(wildcard sax/net/*.h)
 HDRS+= $(wildcard sax/xml/*.h)
 
 INC = -I. 
@@ -24,19 +30,23 @@ AR = ar
 RANLIB = ranlib
 
 ARFLAGS = rc
-CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP
+CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP #-DLOG_OFF
 LIB = 
 
 ifdef DEBUG
-CCFLAGS += -g -DDEBUG=1
+CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0 -fstrict-aliasing
 else
-CCFLAGS += -O3 -DNDEBUG
+CCFLAGS += -O3 -DNDEBUG -fstrict-aliasing
+endif
+
+ifdef PROFILE
+CCFLAGS += -pg
 endif
 
 ifdef WINDIR
 LIB = -lws2_32
 else
-CCFLAGS += -fPIC -DHAVE_EPOLL
+#CCFLAGS += -DHAVE_EPOLL
 endif
 
 CXXFLAGS = $(CCFLAGS) -D__cplusplus 
@@ -49,9 +59,10 @@ $(TARGET): $(OBJS)
 	@$(AR) $(ARFLAGS) $(TARGET) $(OBJS)
 	@$(RANLIB) $(TARGET)
 
-shared: $(OBJS)
-	@echo Achiving shared library
-	@$(CXX) -shared -o $(patsubst %.a,%.so,$(TARGET)) $(OBJS) $(LIB)
+# need -fPIC option
+#shared: $(OBJS)
+#	@echo Achiving shared library
+#	@$(CXX) -shared -o $(patsubst %.a,%.so,$(TARGET)) $(OBJS) $(LIB)
 
 clean: 
 	@echo Removing object files

@@ -1,98 +1,152 @@
-#ifndef __NETUTIL_H__
-#define __NETUTIL_H__
+#ifndef __NETUTIL_H_2012__
+#define __NETUTIL_H_2012__
 
-/**
- * @file netutil.h
- * @brief c++ wrapper for some objects defined in os_net.h
- *
- * @author x_zhou , livingroom
- * @date 2011-8-4
- */
-#include <stdint.h>
-#include <stdlib.h>
-#include <string>
-#include <sax/os_net.h>
+#include <new>
+#include "sax/os_types.h"
+#include "sax/os_net.h"
+#include "buffer.h"
+#include "linked_buffer.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
+#define MAX_UDP_PACKAGE_SIZE 2048
 
 namespace sax {
 
-class socket {
+struct transport_handler;
+
+class transport
+{
 public:
-	inline static int net_start() {return g_net_start();}
-	inline static void net_clean() {g_net_clean();}
-	inline static int set_non_block(int fd) {return g_set_non_block(fd);}
-	inline static int set_keepalive(int fd, int keepidle_sec, int keepintvl_sec, int keepcnt)
-	{return g_set_keepalive(fd, keepidle_sec, keepintvl_sec, keepcnt);}
-	// TODO: add other functions about socket...
+	struct id
+	{
+		int32_t    seq;
+		int32_t    fd;
+		transport* trans;
+
+		id() : seq(0), fd(0), trans(NULL) {}
+		id(uint64_t _seq, int32_t _fd, transport* _trans) :
+			seq(_seq), fd(_fd), trans(_trans)
+		{}
+
+		id(const id& tid)
+		{
+			seq = tid.seq;
+			fd = tid.fd;
+			trans = tid.trans;
+		}
+
+		id& operator = (const id& tid)
+		{
+			seq = tid.seq;
+			fd = tid.fd;
+			trans = tid.trans;
+			return *this;
+		}
+
+		bool operator == (const id& tid) const
+		{
+			return seq == tid.seq && trans == tid.trans;
+		}
+
+		bool operator < (const id& tid) const
+		{
+			if (trans != tid.trans) return trans < tid.trans;
+			if (seq != tid.seq) return seq < tid.seq;
+			return fd < tid.fd;
+		}
+	};
+
+private:
+	struct context
+	{
+		enum TYPE {TCP_LISTEN, UDP_BIND, TCP_CONNECTION};
+		uint16_t type;
+		uint16_t port_h;
+		uint32_t ip_n;
+		id       tid;
+		linked_buffer* read_buf;
+		linked_buffer* write_buf;
+	};
+
+public:
+	transport();
+	~transport();
+
+	bool init(int32_t maxfds, transport_handler* handler);
+	// for reusing _ctx and multithread handling.
+	// be careful when use the same handler in multithread.
+	bool clone(const transport& source, transport_handler* handler);
+
+	bool listen(const char* addr, uint16_t port_h, int32_t backlog/* = 511*/,
+			id& tid);
+	bool listen_clone(const id& source);	// for multithread accept
+
+	bool bind(const char* addr, uint16_t port_h, id& tid);
+	bool bind_clone(const id& source);	// for multithread recv
+
+	bool connect(const char* addr, uint16_t port_h, id& tid);
+
+	bool send(const id& tid, const char* buf, int32_t length);
+
+	// use the binded socket to send
+	bool send_udp(const id& tid, uint32_t dest_ip_n,
+			uint16_t dest_port_h, const char* buf, int32_t length);
+	// use a random port to send
+	bool send_udp(uint32_t dest_ip_n, uint16_t dest_port_h,
+			const char* buf, int32_t length);
+
+	void close(const id& tid);
+
+	void poll(uint32_t millseconds);
+
+	inline int32_t maxfds() {return _maxfds;}
+
+	bool has_outdata(const id& tid);
+
+private:
+
+	bool add_fd(int fd, int eda_mask, const char* addr, uint16_t port_h,
+			context::TYPE type);
+	bool add_fd(int fd, int eda_mask, uint32_t ip_n, uint16_t port_h,
+			context::TYPE type);
+
+	void toggle_write(int fd, bool on = true);
+
+	static void eda_callback(g_eda_t* mgr, int fd, void* user_data, int mask);
+
+	static bool handle_tcp_accept(transport* trans, int fd);
+	static bool handle_tcp_write(transport* trans, int fd, context& ctx);
+	static bool handle_tcp_read(transport* trans, int fd, context& ctx);
+
+	static bool handle_udp_read(transport* trans, int fd, context& ctx);
+
+private:
+	transport_handler* _handler;
+	context*   _ctx;
+	g_eda_t*   _eda;
+	int32_t    _maxfds;
+	int32_t    _seq;
+
+	bool       _inited;
+	bool       _cloned;
 };
 
-class tcp_socket {
-public:
-	tcp_socket() : _fd(-1) {}
-	tcp_socket(int fd) : _fd(fd) {}
-	bool connect(const char *addr, int port, bool non_block = true);
-	int read(void *buf, size_t count);
-	int write(const void *buf, size_t count);
-	inline void close() {if(_fd > 0) g_tcp_close(_fd);}
-	inline int get_fd() {return _fd;}
-	inline void set_fd(const int &fd) {_fd = fd;}
+struct transport_handler
+{
+	transport_handler(transport* trans) : _trans(trans) {}
+	virtual ~transport_handler() {}
 
-    bool listen(const char *addr, int port, bool non_block = false);
-    int accept(char *cli_ip, int *port);
-private:
-	int _fd;
-};
+	virtual void on_accepted(const transport::id& new_conn,
+			const transport::id& from, uint32_t ip_n, uint16_t port_h) = 0;
+	virtual void on_tcp_send(const transport::id& tid, size_t send_bytes) = 0;
+	virtual void on_tcp_received(const transport::id& tid, linked_buffer* buf) = 0;
+	virtual void on_udp_received(const transport::id& tid, const char* data,
+			size_t length, uint32_t ip_n, uint16_t port_h) = 0;
+	virtual void on_closed(const transport::id& tid, int err) = 0;
 
-class udp_socket {
-public:
-    udp_socket() : _fd(-1) {}
-    bool connect(const char *addr,const int &port);
-    inline void close() {if(_fd > 0) g_udp_close(_fd);}
-    int read(void *buf, size_t count, char *ip, int *port);
-    int write(const void *buf,const int &buf_len, const char *ip,const int &port);
-private:
-    int _fd;
-};
-
-class epoll_mgr {
-public:
-    epoll_mgr() : _mgr(NULL) {}
-    ~epoll_mgr() {if(_mgr) g_eda_close(_mgr);}
-    inline bool init() {return (_mgr = g_eda_open()) != NULL;}
-    bool add(const int &fd,const bool &read,const bool &write,const bool &error,void *data = NULL, g_eda_func *proc = epoll_mgr::call_back);
-    void del(const int &fd,const bool &read,const bool &write,const bool &error);
-    void set(const int &fd,const bool &read,const bool &write,const bool &error);
-    int loop(const int &msec);
-    inline void start_service(const int &msec) {while(true) { loop(msec);}}
-private:
-    static void call_back(g_eda_t *mgr, int fd, void *data, int mask);
-private:
-    g_eda_t *_mgr;
-};
-
-class epoll_ctx {
-    friend class epoll_mgr;
-public:
-    epoll_ctx(int fd, epoll_mgr *m) : _fd(fd), _mgr(m) {}
-    virtual ~epoll_ctx() {}
-public:
-    inline void set_fd(const int &fd) {_fd = fd;}
-    inline int get_fd() {return _fd;}
-    inline epoll_mgr* get_epoll_mgr() {return _mgr;}
-    inline bool add_event(const bool &read,const bool &write,const bool &error) {return _mgr->add(_fd, read, write, error, this);}
-    inline void del_event(const bool &read,const bool &write,const bool &error) {_mgr->del(_fd, read, write, error);}
-    void set_event(const bool &read,const bool &write,const bool &error) {_mgr->set(_fd, read, write, error);}
-    virtual void handle_read_event() = 0;
-    virtual void handle_write_event() = 0;
-    virtual void handle_error_event() = 0;
-private:
-    int _fd;
-    epoll_mgr *_mgr;
+protected:
+	transport* _trans;
 };
 
 } // namespace
 
-#endif//__cplusplus
-
-#endif /* __NETUTIL_H__ */
+#endif//__NETUTIL_H_2012__

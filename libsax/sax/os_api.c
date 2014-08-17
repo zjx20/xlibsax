@@ -5,6 +5,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
+#include <math.h>
+#include "compiler.h"
 
 // some compilers do not define NDEBUG automatically
 // when release! we patch this for assert(.)!
@@ -319,7 +321,7 @@ int g_url_decode(const char *src, int src_len, char *dst,
 	return j;
 }
 
-int g_url_encode(const char *src, char *dst, int dst_len) 
+int g_url_encode(const char *src, char *dst, int dst_len)
 {
 	static const char *dont_escape = "._-$,;~()";
 	static const char *hex = "0123456789abcdef";
@@ -329,7 +331,7 @@ int g_url_encode(const char *src, char *dst, int dst_len)
 	for (; *src != '\0' && dst < end; src++, dst++) 
 	{
 		if (isalnum(*(unsigned char *) src) ||
-			strchr(dont_escape, * (unsigned char *) src) != NULL) 
+			strchr(dont_escape, * (unsigned char *) src) != NULL)
 		{
 			*dst = *src;
 		}
@@ -935,7 +937,7 @@ void g_mutex_leave(g_mutex_t *p)
 }
 
 // ################################################################
-g_thread_t g_thread_start(long (*func)(void *), void *user)
+g_thread_t g_thread_start(void* (*func)(void *), void *user)
 {
 	HANDLE h = CreateThread(NULL, 0,
 		(LPTHREAD_START_ROUTINE) func, user, 0, NULL);
@@ -955,7 +957,7 @@ int g_thread_join(g_thread_t th, long *ret)
 	CloseHandle(h); return 1;
 }
 
-int g_thread_start_detached(long (*func)(void *), void *user)
+int g_thread_start_detached(void* (*func)(void *), void *user)
 {
 	HANDLE h = CreateThread(NULL, 0,
 		(LPTHREAD_START_ROUTINE) func, user, 0, NULL);
@@ -972,6 +974,10 @@ int g_thread_sleep(double sec)
 }
 
 void g_thread_yield() {Sleep(0);}
+
+void g_thread_pause() {
+#warning "g_thread_pause() is not implemented."
+}
 
 void g_thread_exit(long ret) {ExitThread(ret);}
 
@@ -1687,6 +1693,10 @@ int g_shm_unit(void)
 	return info.dwAllocationGranularity;
 }
 
+void* g_shm_alloc_pages(uint32_t pages)
+{
+#warning "g_shm_alloc_pages() is not implemented in windows."
+}
 
 #else // OS=!WIN32
 
@@ -1699,8 +1709,13 @@ int g_shm_unit(void)
 #include <errno.h>
 
 #include <sys/syscall.h>
-#include <sys/vfs.h>
+
+#ifndef __APPLE_CC__
+#include <sys/vfs.h>	// statfs() and struct statfs for linux, in g_disk_info()
 #include <sys/prctl.h>
+#else
+#include <sys/mount.h>	// statfs() and struct statfs for mac OS X, in g_disk_info()
+#endif
 
 #define __USE_GNU 1
 #include <sched.h>
@@ -1921,14 +1936,12 @@ int g_load_avg(void)
 
 static int read_cpu_time(uint32_t t[4])
 {
-	char buf[1024], name[32];
+	int ret = 0;
 	FILE *fp = fopen("/proc/stat", "rb");
 	if (!fp) return 0;
-	fgets(buf, sizeof(buf), fp);
+	ret = (4 == fscanf(fp, "%*s%u%u%u%u", &t[0], &t[1], &t[2], &t[3]));
 	fclose(fp);
-
-	return (5==sscanf(buf, " %s %u %u %u %u",
-		name, &t[0], &t[1], &t[2], &t[3]));
+	return ret;
 }
 
 int g_cpu_usage(char tick[16], int *out)
@@ -1990,11 +2003,10 @@ static void to_abs_ts(double sec, struct timespec *ts)
 	assert(sec >= 0);
 	if (gettimeofday(&tv, NULL) == 0)
 	{
-		long   inte = (long) sec;
-		double frac = (sec - inte);
+		double inte, frac;
+		frac = modf(sec, &inte);
 		ts->tv_sec = tv.tv_sec + (time_t) inte;
-		ts->tv_nsec = (long) (
-			tv.tv_usec*1000 + frac*1000000000);
+		ts->tv_nsec = tv.tv_usec*1000 + (long)(frac*1000000000);
 		if (ts->tv_nsec >= 1000000000) {
 			ts->tv_sec++;
 			ts->tv_nsec -= 1000000000;
@@ -2077,15 +2089,37 @@ void g_mutex_enter(g_mutex_t *p)
 #endif // PTHREAD_MUTEX_RECURSIVE
 }
 
+
+#if defined(__APPLE_CC__) || defined(__ANDROID__)
+#define NO_PTHREAD_MUTEX_TIMEDLOCK 1
+#endif
+
+#define TIMED_LOCK(trylock, sec, ret) \
+	do { \
+		int64_t interval = (int64_t) (sec * 1000000); \
+		int64_t start_us = g_now_us();                \
+		int64_t now_us;                               \
+		do {                                          \
+			usleep(10);                               \
+			ret = trylock;                            \
+			if (ret == 0) break;                      \
+			now_us = g_now_us();                      \
+		} while (now_us - start_us < interval);       \
+	} while(0)
+
 static int exec_try_lock(pthread_mutex_t *mt, double sec)
 {
 	int ret = pthread_mutex_trylock(mt);
 	if (0 == ret) return 0;
 
 	if (sec > 0) {
+#ifdef NO_PTHREAD_MUTEX_TIMEDLOCK
+		TIMED_LOCK(pthread_mutex_trylock(mt), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_mutex_timedlock(mt, &ts);
+#endif
 	}
 	return ret;
 }
@@ -2131,11 +2165,10 @@ void g_mutex_leave(g_mutex_t *p)
 }
 
 // ################################################################
-g_thread_t g_thread_start(long (*func)(void *), void *user)
+g_thread_t g_thread_start(void* (*func)(void *), void *user)
 {
-	typedef void* (fx_t)(void *);
 	pthread_t id;
-	int i = pthread_create(&id, NULL, (fx_t *)func, user);
+	int i = pthread_create(&id, NULL, func, user);
 	return (i==0 ? (g_thread_t) id : NULL);
 }
 
@@ -2146,14 +2179,13 @@ int g_thread_join(g_thread_t th, long *ret)
 	return (pthread_join(id, (void **)ret)==0);
 }
 
-int g_thread_start_detached(long (*func)(void *), void *user)
+int g_thread_start_detached(void* (*func)(void *), void *user)
 {
-	typedef void* (fx_t)(void *);
-	pthread_attr_t	attr;
+	pthread_attr_t attr;
 	pthread_t id;
 	(void) pthread_attr_init(&attr);
 	(void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	return (0==pthread_create(&id, &attr, (fx_t *)func, user));
+	return (0==pthread_create(&id, &attr, func, user));
 }
 
 int g_thread_sleep(double sec)
@@ -2179,34 +2211,83 @@ int g_thread_sleep(double sec)
 
 void g_thread_yield() {sched_yield();}
 
+void g_thread_pause() {asm ("pause");}
+
 void g_thread_exit(long ret) {pthread_exit((void *)ret);}
 
+#ifdef __APPLE_CC__
+long g_thread_id() {return (long)pthread_mach_thread_np(pthread_self());} //gettid()
+#else
 #ifndef SYS_gettid
 #define SYS_gettid __NR_gettid
 #endif
 long g_thread_id() {return (long)syscall(SYS_gettid);} //gettid()
+#endif
+
+#ifdef __APPLE_CC__
+// Thread Affinity API: http://developer.apple.com/library/mac/#releasenotes/Performance/RN-AffinityAPI/_index.html
+// code was ported from: https://bitbucket.org/bosilca/dague.public/src/115d9194bd7c/src/bindthread.c
+#include <mach/mach_init.h>
+#include <mach/thread_policy.h>
+static int bindthread(int cpu)
+{
+	// define this because it has been commented in mach/thread_policy.h, on mac OSX 10.8.2
+	kern_return_t	thread_policy_set(
+						thread_t					thread,
+						thread_policy_flavor_t		flavor,
+						thread_policy_t				policy_info,
+						mach_msg_type_number_t		count);
+
+	thread_affinity_policy_data_t ap;
+	int                           ret;
+
+	ap.affinity_tag = 1; /* non-null affinity tag */
+	ret = thread_policy_set(
+							mach_thread_self(),
+							THREAD_AFFINITY_POLICY,
+							(integer_t*) &ap,
+							THREAD_AFFINITY_POLICY_COUNT
+							);
+
+	return ret == 0 ? 1 : 0;
+}
+#else
+static int bindthread(int cpu)
+{
+	cpu_set_t _set;
+	cpu_set_t _get;
+
+	CPU_ZERO(&_set);
+	CPU_SET(cpu, &_set);
+	sched_setaffinity(0, sizeof(_set), &_set);
+
+	CPU_ZERO(&_get);
+	sched_getaffinity(0, sizeof(_get), &_get);
+
+	return CPU_ISSET(cpu, &_get);
+}
+#endif
 
 int g_thread_bind(int cpu, const char *name) 
 {
 	if (cpu >= 0) {
 		int num = sysconf(_SC_NPROCESSORS_CONF);
 		if (cpu < num) {
-			cpu_set_t _set;
-			cpu_set_t _get;
-			
-			CPU_ZERO(&_set);
-			CPU_SET(cpu, &_set);
-			sched_setaffinity(0, sizeof(_set), &_set);
-			
-			CPU_ZERO(&_get);
-			sched_getaffinity(0, sizeof(_get), &_get);
-			
-			return CPU_ISSET(cpu, &_get);
+			return bindthread(cpu);
 		}
 		return 0;
 	}
 	if (name && *name) {
-		prctl(PR_SET_NAME, name);
+		//prctl(PR_SET_NAME, name);
+
+#ifdef __APPLE_CC__
+#define PTHREAD_SETNAME(name) pthread_setname_np(name)
+#else
+#define PTHREAD_SETNAME(name) pthread_setname_np(pthread_self(), name)
+#endif
+
+		// use pthread_setname_np() for portability
+		PTHREAD_SETNAME(name);
 	}
 	return 1;
 }
@@ -2221,12 +2302,7 @@ long g_lock_set(long *ptr, long new_val)
 
 long g_lock_add(long *ptr, long inc_val)
 {
-	if (inc_val > 0) {
-		return __sync_fetch_and_add(ptr, +inc_val);
-	}
-	else {
-		return __sync_fetch_and_sub(ptr, -inc_val);
-	}
+	return __sync_fetch_and_add(ptr, inc_val);
 }
 
 long g_ifeq_set(long *ptr, long cmp, long new_val)
@@ -2326,9 +2402,13 @@ int  g_share_try_lockw(g_share_t *s, double sec)
 	if (0 == ret) return 1;
 
 	if (sec > 0) {
+#ifdef __APPLE_CC__
+		TIMED_LOCK(pthread_rwlock_trywrlock(&s->lock), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_rwlock_timedwrlock(&s->lock, &ts);
+#endif
 	}
 	return (ret==0);
 }
@@ -2344,9 +2424,13 @@ int  g_share_try_lockr(g_share_t *s, double sec)
 	if (0 == ret) return 1;
 
 	if (sec > 0) {
+#ifdef __APPLE_CC__
+		TIMED_LOCK(pthread_rwlock_tryrdlock(&s->lock), sec, ret);
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		ret = pthread_rwlock_timedrdlock(&s->lock, &ts);
+#endif
 	}
 	return (ret==0);
 }
@@ -2356,21 +2440,272 @@ void g_share_unlock(g_share_t *s)
 	pthread_rwlock_unlock(&s->lock);
 }
 // ################################################################
-struct g_atom_t {
-	int32_t sem; ///< semaphore
-	volatile int32_t  wc; ///< count of writers
-	volatile int32_t  rc; ///< count of readers
+
+#if !defined(SPIN_DEBUG)
+	#if !defined(_DEBUG)
+	#define SPIN_DEBUG 0
+	#else
+	#define SPIN_DEBUG 1
+	#endif
+#endif
+
+
+#if SPIN_DEBUG
+
+#define SPIN_DEBUG_CHECK(s) \
+	do {	\
+		assert(s->wc <= 1);	\
+		assert((s->wc == 1 && s->rc == 0) || (s->wc == 0 && s->rc >= 0));	\
+	} while(0)
+
+#define SPIN_DEBUG_INC_READER(s) __sync_add_and_fetch(&s->rc, 1)
+#define SPIN_DEBUG_DEC_READER(s) __sync_sub_and_fetch(&s->rc, 1)
+#define SPIN_DEBUG_INC_WRITER(s) __sync_add_and_fetch(&s->wc, 1)
+#define SPIN_DEBUG_DEC_WRITER(s) __sync_sub_and_fetch(&s->wc, 1)
+
+#else
+#define SPIN_DEBUG_CHECK(s)
+#define SPIN_DEBUG_INC_READER(s)
+#define SPIN_DEBUG_DEC_READER(s)
+#define SPIN_DEBUG_INC_WRITER(s)
+#define SPIN_DEBUG_DEC_WRITER(s)
+#endif
+
+#define SPIN(s, spin, cond, ret)						\
+	do {												\
+		int n = 1, i;									\
+		do {											\
+			for (i = 0; i < n; i++) g_thread_pause();	\
+		} while (!(ret = (cond)) && (n <<= 1) < spin);	\
+	} while(0)
+
+
+struct g_spin_t {
+	volatile int32_t sem;	///< semaphore
+#if SPIN_DEBUG
+	volatile int32_t rc;
+	volatile int32_t wc;
+#endif
 };
 
-void g_atom_enter(g_atom_t *s)
+#define SPIN_PURE_INIT_VALUE		0x00000000
+#define SPIN_PURE_LOCK_VALUE		0x00000001
+
+g_spin_t* g_spin_init()
 {
-	while (!__sync_bool_compare_and_swap(
-		&s->sem, 0, 1)) sched_yield();
+	g_spin_t* s = malloc(sizeof(g_spin_t));
+	if (s == NULL) return NULL;
+
+	memset(s, 0, sizeof(g_spin_t));
+
+	s->sem = SPIN_PURE_INIT_VALUE;
+
+	return s;
 }
 
-void g_atom_leave(g_atom_t *s)
+void g_spin_free(g_spin_t* s)
 {
-	(void)__sync_lock_test_and_set(&s->sem, 0);
+	assert(s);
+	assert(s->sem == SPIN_PURE_INIT_VALUE);
+	free(s);
+}
+
+
+#define SPIN_PURE_TRYLOCK(s) (s->sem == SPIN_PURE_INIT_VALUE && \
+		__sync_bool_compare_and_swap(&s->sem, SPIN_PURE_INIT_VALUE, SPIN_PURE_LOCK_VALUE))
+
+#define SPIN_PURE_UNLOCK(s) s->sem = SPIN_PURE_INIT_VALUE
+
+void g_spin_enter(g_spin_t* s, int spin)
+{
+	int spin_ret;
+	while (!SPIN_PURE_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_PURE_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		g_thread_yield();
+	}
+
+	SPIN_DEBUG_INC_WRITER(s);
+	SPIN_DEBUG_CHECK(s);
+}
+
+void g_spin_leave(g_spin_t* s)
+{
+	SPIN_DEBUG_CHECK(s);
+	SPIN_DEBUG_DEC_WRITER(s);
+
+	SPIN_PURE_UNLOCK(s);
+}
+
+// ################################################################
+struct g_spin_rw_t {
+	volatile int32_t sem;	///< semaphore
+	volatile int32_t w;		///< writers need lock
+	int32_t prefer_writer;
+#if SPIN_DEBUG
+	volatile int32_t rc;
+	volatile int32_t wc;
+#endif
+};
+
+#define SPIN_WRITER_LOCK_FLAG		0x40000000
+#define SPIN_RWLOCK_INIT_VALUE		0x00000000
+#define SPIN_WRITER_LOCK_VALUE		(SPIN_RWLOCK_INIT_VALUE | SPIN_WRITER_LOCK_FLAG)
+
+g_spin_rw_t* g_spin_rw_init(int prefer_writer)
+{
+	g_spin_rw_t* s = malloc(sizeof(g_spin_rw_t));
+	if (s == NULL) return NULL;
+
+	memset(s, 0, sizeof(g_spin_rw_t));
+
+	s->sem = SPIN_RWLOCK_INIT_VALUE;
+	if (prefer_writer) {
+		s->prefer_writer = 1;
+	}
+
+	return s;
+}
+
+void g_spin_rw_free(g_spin_rw_t* s)
+{
+	assert(s);
+	assert(s->sem == SPIN_RWLOCK_INIT_VALUE);
+	assert((s->w) == 0);
+	free(s);
+}
+
+#define SPIN_WRITER_TRYLOCK(s) (s->sem == SPIN_RWLOCK_INIT_VALUE && \
+		__sync_bool_compare_and_swap(&s->sem, SPIN_RWLOCK_INIT_VALUE, SPIN_WRITER_LOCK_VALUE))
+
+#define SPIN_WRITER_UNLOCK(s) (__sync_and_and_fetch(&s->sem, ~SPIN_WRITER_LOCK_FLAG))
+
+void g_spin_lockw(g_spin_rw_t* s, int spin)
+{
+	if (SPIN_WRITER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+		return;
+	}
+
+	if (s->prefer_writer) __sync_add_and_fetch(&s->w, 1);
+
+	int spin_ret;
+	while (!SPIN_WRITER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_WRITER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		g_thread_yield();
+	}
+
+	if (s->prefer_writer) __sync_sub_and_fetch(&s->w, 1);
+
+	SPIN_DEBUG_INC_WRITER(s);
+	SPIN_DEBUG_CHECK(s);
+}
+
+int g_spin_try_lockw(g_spin_rw_t* s, double sec, int spin)
+{
+	if (SPIN_WRITER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+		return 0;
+	}
+
+	if (sec <= 0) return 1;
+
+	if (s->prefer_writer) __sync_add_and_fetch(&s->w, 1);
+
+	int ret = 0;
+	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
+
+	int spin_ret;
+	while (!SPIN_WRITER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_WRITER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		if (g_now_us() > limit) { ret = 1; break; }
+		g_thread_yield();
+	}
+
+	if (s->prefer_writer) __sync_sub_and_fetch(&s->w, 1);
+
+#if SPIN_DEBUG
+	if (ret == 0) {
+		SPIN_DEBUG_INC_WRITER(s);
+		SPIN_DEBUG_CHECK(s);
+	}
+#endif
+
+	return ret;
+}
+
+void g_spin_unlockw(g_spin_rw_t* s)
+{
+	SPIN_DEBUG_CHECK(s);
+	SPIN_DEBUG_DEC_WRITER(s);
+
+	SPIN_WRITER_UNLOCK(s);
+}
+
+#define SPIN_READER_TRYLOCK(s) \
+	/* s->w > 0 if there are some writers want to get the lock */	\
+	( (s->w == 0) && \
+	/* check whether the lock has been allocated by a writer */	\
+	(s->sem & SPIN_WRITER_LOCK_FLAG) == 0 && \
+	((__sync_fetch_and_add(&s->sem, 1) & SPIN_WRITER_LOCK_FLAG) ? \
+			(__sync_sub_and_fetch(&s->sem, 1), 0)/* comma expression, returning 0 */ : 1) )
+
+#define SPIN_READER_UNLOCK(s) __sync_sub_and_fetch(&s->sem, 1)
+
+void g_spin_lockr(g_spin_rw_t* s, int spin)
+{
+	int spin_ret;
+	while (!SPIN_READER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_READER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		g_thread_yield();
+	}
+
+	SPIN_DEBUG_INC_READER(s);
+	SPIN_DEBUG_CHECK(s);
+}
+
+int g_spin_try_lockr(g_spin_rw_t* s, double sec, int spin)
+{
+	if (SPIN_READER_TRYLOCK(s)) {
+		SPIN_DEBUG_INC_READER(s);
+		SPIN_DEBUG_CHECK(s);
+		return 0;
+	}
+
+	if (sec <= 0) return 1;
+
+	int ret = 0;
+	int64_t limit = g_now_us() + (int64_t)(sec * 1000000);
+
+	int spin_ret;
+	while (!SPIN_READER_TRYLOCK(s)) {
+		SPIN(s, spin, SPIN_READER_TRYLOCK(s), spin_ret);
+		if (spin_ret) break;
+		if (g_now_us() > limit) { ret = 1; break; }
+		g_thread_yield();
+	}
+
+#if SPIN_DEBUG
+	if (ret == 0) {
+		SPIN_DEBUG_INC_READER(s);
+		SPIN_DEBUG_CHECK(s);
+	}
+#endif
+
+	return ret;
+}
+
+void g_spin_unlockr(g_spin_rw_t* s)
+{
+	SPIN_DEBUG_CHECK(s);
+	SPIN_DEBUG_DEC_READER(s);
+
+	SPIN_READER_UNLOCK(s);
 }
 
 // ################################################################
@@ -2379,17 +2714,17 @@ struct g_sema_t {sem_t sem;};
 
 g_sema_t *g_sema_init(uint32_t cap, uint32_t cnt)
 {
-	sem_t sem;
 	UNUSED_PARAMETER(cap);
 	
-	if (sem_init(&sem, 0, cnt)==0)
-	{
-		g_sema_t *s = (g_sema_t *) malloc(sizeof(g_sema_t));
-		assert(s);
-		s->sem = sem;
-		return s;
+	g_sema_t *s = (g_sema_t *) malloc(sizeof(g_sema_t));
+	if (s == NULL) return NULL;
+
+	if (sem_init(&s->sem, 0, cnt) != 0) {
+		free(s);
+		return NULL;
 	}
-	return NULL;
+
+	return s;
 }
 
 void g_sema_free(g_sema_t *s)
@@ -2413,9 +2748,15 @@ int	g_sema_wait(g_sema_t *s, double sec)
 		return (sem_wait(&s->sem)==0);
 	}
 	else if (sec > 0) {
+#ifdef __APPLE_CC__
+		int ret = 1;
+		TIMED_LOCK(sem_trywait(&s->sem), sec, ret);
+		return ret==0;
+#else
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
 		return (sem_timedwait(&s->sem, &ts)==0);
+#endif
 	}
 	return (sem_trywait(&s->sem)==0);
 }
@@ -2716,6 +3057,11 @@ static shm_t *shm_open_impl(
 		}
 	}
 	else {
+
+#ifdef __APPLE_CC__
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
 		if (!len) len = unit;
 		flags |= MAP_ANONYMOUS;
 	}
@@ -2779,6 +3125,16 @@ int g_shm_unit(void)
 	return sysconf(_SC_PAGESIZE);
 }
 
+void* g_shm_alloc_pages(uint32_t pages)
+{
+	return valloc(g_shm_unit() * pages);
+}
+
+void g_shm_free_pages(void* ptr)
+{
+	free(ptr);
+}
+
 #endif // OS=!WIN32
 
 
@@ -2808,7 +3164,7 @@ uint64_t g_now_uid()
 #define DIV(a, b) ((a) / (b) - ((a) % (b) < 0))
 #define LEAPS_THRU_END_OF(y) (DIV(y, 4) - DIV(y, 100) + DIV(y, 400))
 
-void g_localtime(const void *_sec, void *_tp, long offset)
+struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset)
 {
 	/* How many days come before each month (0-12). */
 	static const short __mon_yday[2][13] =
@@ -2820,14 +3176,14 @@ void g_localtime(const void *_sec, void *_tp, long offset)
 	};
 
 	long days, rem, y;
-	const time_t *sec;
+	time_t sec;
 	const short *ip;
 	struct tm *tp;
 
 	tp = (struct tm *) _tp;
-	sec = (const time_t *) _sec;
-	days = *sec / SECS_PER_DAY;
-	rem  = *sec % SECS_PER_DAY;
+	sec = _sec;
+	days = sec / SECS_PER_DAY;
+	rem  = sec % SECS_PER_DAY;
 	rem += offset;
 	
 	while (rem < 0) { rem += SECS_PER_DAY; --days;}
@@ -2865,98 +3221,8 @@ void g_localtime(const void *_sec, void *_tp, long offset)
 	tp->tm_mon = y;
 	tp->tm_mday = days + 1;
 	tp->tm_isdst = 0;
-}
 
-g_atom_t *g_atom_init(void)
-{
-	return (g_atom_t *) calloc(1, sizeof(g_atom_t));
-}
-
-void g_atom_free(g_atom_t *a)
-{
-	assert(a);
-	assert(a->sem==0);
-	assert(a->wc==0);
-	assert(a->rc==0);
-	free(a);
-}
-
-void g_atom_lockw(g_atom_t *s)
-{
-	g_atom_enter(s);
-	while (s->wc > 0 || s->rc > 0)
-	{
-		g_atom_leave(s);
-		g_thread_yield();
-		g_atom_enter(s);
-	}
-	s->wc++;
-	g_atom_leave(s);
-}
-
-int g_atom_try_lockw(g_atom_t *s, double sec)
-{
-	int ret = 0;
-	g_atom_enter(s);
-	if (sec <= 0) {
-		if (!s->wc && !s->rc) {s->wc++; ret=1;}
-	}
-	else {
-		int64_t ticks = (int64_t)(sec*1000000);
-		int64_t limit = ticks + g_now_us();
-		for (;;) {
-			if (!s->wc && !s->rc) {s->wc++; ret=1; break;}
-			g_atom_leave(s);
-			if (g_now_us() > limit) return 0;
-			g_thread_yield();
-			g_atom_enter(s);
-		}
-	}
-	g_atom_leave(s);
-	return ret;
-}
-
-void g_atom_lockr(g_atom_t *s)
-{
-	g_atom_enter(s);
-	while (s->wc > 0) {
-		g_atom_leave(s);
-		g_thread_yield();
-		g_atom_enter(s);
-	}
-	s->rc++;
-	g_atom_leave(s);
-}
-
-
-int g_atom_try_lockr(g_atom_t *s, double sec)
-{
-	int ret = 0;
-	g_atom_enter(s);
-	if (sec <= 0) {
-		if (!s->wc) {s->rc++; ret=1;}
-	}
-	else {
-		int64_t ticks = (int64_t)(sec*1000000);
-		int64_t limit = ticks + g_now_us();
-		for (;;) {
-			if (!s->wc) {s->rc++; ret=1; break;}
-			g_atom_leave(s);
-			if (g_now_us() > limit) return 0;
-			g_thread_yield();
-			g_atom_enter(s);
-		}
-	}
-	g_atom_leave(s);
-	return ret;
-}
-
-void g_atom_unlock(g_atom_t *s)
-{
-	g_atom_enter(s);
-	if (s->wc > 0) s->wc--;
-	else s->rc--;
-	g_atom_leave(s);
+	return tp;
 }
 
 //-------------------------------------------------------------------------

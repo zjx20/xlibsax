@@ -37,40 +37,49 @@ protected:
 private:
 	volatile long _stop_flag;
 	volatile long _num_alive;
-	static long proc(void *user);
+	static void* proc(void *user);
 };
 
-/// @brief a wrapper for Single Timer Wheel Timer
-/// @remark derive the function on_timeout()
-class timer_base
+///// @brief a wrapper for Single Timer Wheel Timer
+///// @remark derive the function on_timeout()
+//class timer_base
+//{
+//public:
+//	inline timer_base() : _stw(0) {}
+//	virtual ~timer_base() {
+//		if (_stw) g_timer_destroy(_stw);
+//	}
+//	inline uint32_t start(uint32_t delay, void *param) {
+//		return (_stw ? g_timer_start(_stw,
+//			delay, &timer_base::proc, this, param) : 0);
+//	}
+//	inline bool cancel(uint32_t id) {
+//		return _stw && g_timer_cancel(_stw, id);
+//	}
+//	inline bool init(uint32_t capacity,
+//		uint32_t wheel_size=1024, uint32_t granularity=10)
+//	{
+//		if (_stw) g_timer_destroy(_stw);
+//		_stw = g_timer_create(capacity, wheel_size, granularity);
+//		return (NULL != _stw);
+//	}
+//	inline void poll() {
+//		if (_stw) g_timer_loop(_stw);
+//	}
+//protected:
+//	virtual void on_timeout(uint32_t id, void *param)=0;
+//private:
+//	g_timer_t *_stw;
+//	static void proc(uint32_t id, void *client, void *param);
+//};
+
+class dummy_lock
 {
 public:
-	inline timer_base() : _stw(0) {}
-	virtual ~timer_base() {
-		if (_stw) g_timer_destroy(_stw);
-	}
-	inline uint32_t start(uint32_t delay, void *param) {
-		return (_stw ? g_timer_start(_stw, 
-			delay, &timer_base::proc, this, param) : 0);
-	}
-	inline bool cancel(uint32_t id) {
-		return _stw && g_timer_cancel(_stw, id);
-	}
-	inline bool init(uint32_t capacity, 
-		uint32_t wheel_size=1024, uint32_t granularity=10) 
-	{
-		if (_stw) g_timer_destroy(_stw);
-		_stw = g_timer_create(capacity, wheel_size, granularity);
-		return (NULL != _stw);
-	}
-	inline void poll() {
-		if (_stw) g_timer_loop(_stw);
-	}
-protected:
-	virtual void on_timeout(uint32_t id, void *param)=0;
-private:
-	g_timer_t *_stw;
-	static void proc(uint32_t id, void *client, void *param);
+	inline dummy_lock() {}
+	inline ~dummy_lock() {}
+	inline void enter() {}
+	inline void leave() {}
 };
 
 /// an inline-wrapper for g_mutex_t
@@ -104,23 +113,17 @@ private:
 	g_share_t *_pi;
 };
 
-/// an inline-wrapper for g_atom_t
-class atom_type
+/// an inline-wrapper for g_spin_t
+class spin_type
 {
 public:
-	friend class auto_rwlock;
-	inline  atom_type() {_pi=g_atom_init();}
-	inline ~atom_type() {g_atom_free(_pi);}
-	inline void enter() {g_atom_enter(_pi);}
-	inline void leave() {g_atom_leave(_pi);}
-	
-	inline void lockw() {g_atom_lockw(_pi);}
-	inline int try_lockw(double sec) {return g_atom_try_lockw(_pi, sec);}
-	inline void lockr() {g_atom_lockr(_pi);}
-	inline int try_lockr(double sec) {return g_atom_try_lockr(_pi, sec);}
-	inline void unlock() {g_atom_unlock(_pi);}
+	inline spin_type(int spin_times = 128) {_pi=g_spin_init(); _spin_times = spin_times;}
+	inline ~spin_type() {g_spin_free(_pi);}
+	inline void enter() {g_spin_enter(_pi, _spin_times);}
+	inline void leave() {g_spin_leave(_pi);}
 private:
-	g_atom_t *_pi;
+	g_spin_t *_pi;
+	int _spin_times;
 };
 
 /// an inline-wrapper for g_sema_t
@@ -153,6 +156,30 @@ private:
 };
 
 /**
+* @brief a simple class encapsulating lock/unlock among threads
+*        support mutex_type, spin_type and dummy_lock
+*/
+template <typename T>
+class auto_lock
+{
+public:
+	inline auto_lock(T& lock) : _lock(lock) {
+		_lock.enter();
+	}
+
+	inline auto_lock(T* lock) : _lock(*lock) {
+		_lock.enter();
+	}
+
+	inline ~auto_lock() {
+		_lock.leave();
+	}
+
+private:
+	T& _lock;
+};
+
+/**
 * @brief a simple class encapsulating mutex lock/unlock among threads
 * @see g_mutex_enter(), g_mutex_leave().
 */
@@ -178,34 +205,6 @@ public:
 
 private:
 	g_mutex_t *_mtx; ///> holding the g_mutex_t handle.
-};
-
-// rwlock based on g_atom_xxx:
-class auto_rwlock
-{
-public:
-	inline auto_rwlock(g_atom_t *at, int ex) : _at(at)
-	{
-		if (_at) {
-			if (ex) g_atom_lockw(_at);
-			else    g_atom_lockr(_at);
-		}
-	}
-
-	inline auto_rwlock(atom_type *p, int ex) : _at(p->_pi)
-	{
-		if (_at) {
-			if (ex) g_atom_lockw(_at);
-			else    g_atom_lockr(_at);
-		}
-	}
-
-	/// @brief using deconstructor to unlock a file.
-	inline ~auto_rwlock() {
-		if (_at) g_atom_unlock(_at);
-	}
-private:
-	g_atom_t *_at; ///> a pointer holding the g_atom_t handle.
 };
 
 // rwlock based on g_share_xxx:

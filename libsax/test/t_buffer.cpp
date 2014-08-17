@@ -1,484 +1,470 @@
 /*
  * t_buffer.cpp
  *
- *  Created on: 2011-8-10
- *      Author: x_zhou
+ *  Created on: 2012-4-4
+ *      Author: X
  */
 
 #include "gtest/gtest.h"
 #include "sax/net/buffer.h"
 
-#include <string>
-
-using namespace std;
 using namespace sax;
 
-TEST(concurrent_queue, push_pop_size)
+const uint32_t BLOCK_HEADER_SIZE = 0;
+const uint32_t BLOCK_SIZE = g_shm_unit() - BLOCK_HEADER_SIZE;
+
+TEST(buffer, empty)
 {
-	concurrent_queue<int> q;
-	EXPECT_TRUE(q.size() == 0);
-	q.push(10);
-	EXPECT_TRUE(q.size() == 1);
-	q.push(11);
-	EXPECT_TRUE(q.size() == 2);
-	q.push(12);
-	EXPECT_TRUE(q.size() == 3);
-	q.push(13);
-	EXPECT_TRUE(q.size() == 4);
+	buffer buf;
 
-	int a;
-	EXPECT_TRUE(q.pop(a));
-	EXPECT_EQ(a, 10);
-	EXPECT_TRUE(q.size() == 3);
-	EXPECT_TRUE(q.pop(a));
-	EXPECT_EQ(a, 11);
-	EXPECT_TRUE(q.size() == 2);
-	EXPECT_TRUE(q.pop(a));
-	EXPECT_EQ(a, 12);
-	EXPECT_TRUE(q.size() == 1);
-	EXPECT_TRUE(q.pop(a));
-	EXPECT_EQ(a, 13);
-	EXPECT_TRUE(q.size() == 0);
-}
+	uint8_t tmp[100];
 
-TEST(memory_pool, size_level)
-{
-	memory_pool mem_pool;
-	size_t size = 0;
-	for(int i=2; i<16; i++) {
-		size = (size_t)1 << i;
-		size--;
-		void* p1 = mem_pool.allocate(size);
-		ASSERT_TRUE(p1 != NULL);
-		EXPECT_EQ(size, size_t(1) << i);
-		mem_pool.recycle(size, p1);
-	}
-}
-
-TEST(memory_pool, recycle)
-{
-	memory_pool mem_pool;
-	size_t size = 0;
-	void* p1 = mem_pool.allocate(size);
-	ASSERT_TRUE(p1 != NULL);
-	mem_pool.recycle(size, p1);
-	void* p2 = mem_pool.allocate(size);
-	ASSERT_TRUE(p2 != NULL);
-	EXPECT_EQ((uint64_t)p1, (uint64_t)p2);
-	mem_pool.recycle(size, p2);
-
-	memory_pool mem_pool2(0);
-	size = 20;
-	p1 = mem_pool2.allocate(size);
-	ASSERT_TRUE(p1 != NULL);
-	EXPECT_FALSE(mem_pool2.recycle(size, p1));
-}
-
-TEST(memory_pool, memory_leak)
-{
-	printf("please check memory leak via valgrind.\n");
-
-	const size_t N = 1000;
-
-	memory_pool* mem_pool = new memory_pool();
-	void* ptrs[N] = {0};
-	size_t size[N];
-	for(size_t i=0;i<N;i++) {
-		size[i] = rand() % 65535;
-		ptrs[i] = mem_pool->allocate(size[i]);
-		ASSERT_TRUE(ptrs[i] != NULL);
-	}
-
-	for(size_t i=0;i<N;i++) {
-		mem_pool->recycle(size[i], ptrs[i]);
-	}
-	delete mem_pool;
-}
-
-TEST(libsax_net_buffer, put_get)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-	EXPECT_TRUE(buf.put((uint8_t)0xff));
-	EXPECT_TRUE(buf.flip());
-	uint8_t b;
-	EXPECT_EQ(buf.get(b), true);
-	EXPECT_EQ(b, 0xff);
-}
-
-TEST(libsax_net_buffer_x, single_put_and_get_memory)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-	uint8_t b;
-
-	EXPECT_TRUE(buf.put((uint8_t)0xff));
+	buf.mark();
+	EXPECT_TRUE(buf.reset());
 
 	EXPECT_TRUE(buf.flip());
-
-	EXPECT_TRUE(buf.get(b));
-	EXPECT_EQ(b, 0xff);
-
+	EXPECT_TRUE(buf.get(tmp, 0));
 	EXPECT_TRUE(buf.compact());
+
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.remaining());
+	EXPECT_EQ(uint32_t(0), buf.data_length());
+
+	EXPECT_TRUE(buf.put(tmp, 0));
+	EXPECT_TRUE(buf.flip());
+
+	EXPECT_FALSE(buf.get(tmp, 1));
+
+	EXPECT_EQ(BLOCK_SIZE/*alloc one block in constructor*/, buf.capacity());
+	EXPECT_EQ(0, buf.position());
+
+	EXPECT_EQ(0, buf.remaining());
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.data_length());
+
+	EXPECT_FALSE(buf.peek(tmp[0]));
 }
 
-TEST(libsax_net_buffer_x, complex_put_and_get_memory)
+TEST(buffer, writing_mode)
 {
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	const char* str = "this is a test string.";
 
-	uint8_t b;
+	buffer buf;
 
-	for(int i=0;i<15;i++) {
-		EXPECT_TRUE(buf.put((uint8_t)i));
-	}
+	EXPECT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+	EXPECT_EQ(strlen(str), buf.position());
+
+	EXPECT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+	EXPECT_EQ(strlen(str) * 2, buf.position());
+
+	EXPECT_FALSE(buf.compact());
+
+	EXPECT_EQ(strlen(str) * 2, buf.data_length());
+
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.remaining());
 
 	EXPECT_TRUE(buf.flip());
 
-	EXPECT_TRUE(buf.get(b));
-	EXPECT_EQ(b, 0);
-
-	EXPECT_EQ(buf.remaining(), (size_t)14);
+	EXPECT_EQ(0, buf.position());
 
 	EXPECT_TRUE(buf.compact());
 
-	uint8_t i_buf[20];
-	for(int i=15;i<30;i++) {
-		i_buf[i-15] = i;
-	}
-	EXPECT_TRUE(buf.put(i_buf, 15));
+	EXPECT_TRUE(buf.skip(BLOCK_SIZE * 2));
+	EXPECT_EQ(2 * BLOCK_SIZE + strlen(str) * 2, buf.position());
+	EXPECT_EQ(3 * BLOCK_SIZE, buf.capacity());
+
+	EXPECT_TRUE(buf.flip());
+	EXPECT_TRUE(buf.skip(BLOCK_SIZE));
+	EXPECT_EQ(BLOCK_SIZE, buf.position());
+	EXPECT_TRUE(buf.compact());
+	EXPECT_EQ(3 * BLOCK_SIZE, buf.capacity());	// no shrink
+}
+
+TEST(buffer, reading_mode)
+{
+	const char* str = "this is a test string.";
+	uint8_t tmp[100];
+
+	buffer buf;
+
+	EXPECT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+	EXPECT_EQ(strlen(str), buf.position());
+
+	EXPECT_TRUE(buf.flip());
+	EXPECT_EQ(0, buf.position());
+
+	EXPECT_FALSE(buf.put(tmp, 1));
+	EXPECT_FALSE(buf.get(tmp, 10000));
+
+	EXPECT_TRUE(buf.get(tmp, 4));
+	EXPECT_EQ(0, memcmp(tmp, str, 4));
+
+	EXPECT_EQ(strlen(str) - 4, buf.remaining());
+	EXPECT_EQ(buffer::INVALID_VALUE, buf.data_length());
+
+	EXPECT_TRUE(buf.compact());
+	EXPECT_FALSE(buf.compact());
+	EXPECT_EQ(strlen(str) - 4, buf.position());
+
+	EXPECT_TRUE(buf.put((uint8_t*)"have fun", 8));
 	EXPECT_TRUE(buf.flip());
 
-	EXPECT_TRUE(buf.get(b));
-	EXPECT_EQ(b, 1);
-	EXPECT_EQ(buf.remaining(), (size_t)28);
+	EXPECT_EQ(0, buf.position());
+	EXPECT_TRUE(buf.get(tmp, strlen(str) - 4 + 8));
+	EXPECT_EQ(0, memcmp(tmp, " is a test string.have fun", strlen(str) - 4 + 8));
+}
 
-	uint8_t o_buf[30];
-	EXPECT_TRUE(buf.get(o_buf, 28));
-	EXPECT_FALSE(buf.get(b));
+TEST(buffer, seeking)	// skip rewind
+{
+	const char* str = "this is a test string";
+	uint8_t tmp[100];
+
+	// mark reset
+	{
+		buffer buf;
+
+		buf.mark();
+		EXPECT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+		EXPECT_EQ(strlen(str), buf.position());
+		EXPECT_TRUE(buf.reset());
+		EXPECT_EQ(0, buf.position());
+		EXPECT_TRUE(buf.put((uint8_t*)"that", 4));
+		EXPECT_TRUE(buf.reset());
+		EXPECT_TRUE(buf.flip());
+		EXPECT_FALSE(buf.reset());
+
+		EXPECT_TRUE(buf.get(tmp, strlen(str)));
+		EXPECT_EQ(0, memcmp(tmp, "that is a test string", strlen(str)));
+
+		EXPECT_TRUE(buf.compact());
+		EXPECT_TRUE(buf.put((uint8_t*)"hello ", 6));
+
+		buf.mark();
+		EXPECT_TRUE(buf.put((uint8_t*)"x", 1));
+		EXPECT_TRUE(buf.reset());
+		EXPECT_TRUE(buf.put((uint8_t*)"world", 5));
+		EXPECT_TRUE(buf.flip());
+
+		EXPECT_TRUE(buf.get(tmp, buf.remaining()));
+		EXPECT_EQ(0, memcmp(tmp, "hello world", 11));
+	}
+
+	{
+		// rewind when writing
+		buffer buf;
+
+		uint8_t tmp[100];
+
+		const char* str = "a buffer for high throughput io";
+
+		EXPECT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+		buf.rewind();
+		EXPECT_TRUE(buf.put((uint8_t*)"A", 1));
+		EXPECT_TRUE(buf.reset());
+		EXPECT_TRUE(buf.flip());
+		EXPECT_TRUE(buf.get(tmp, buf.remaining()));
+		EXPECT_EQ(0, memcmp("A buffer for high throughput io", tmp, strlen(str)));
+
+		// rewind when reading
+		buf.rewind();
+		EXPECT_EQ(0, buf.position());
+		EXPECT_TRUE(buf.get(tmp, 1));
+		EXPECT_EQ(tmp[0], (uint8_t)'A');
+		EXPECT_TRUE(buf.reset());
+		EXPECT_EQ(strlen(str), buf.position());
+	}
+
+	{
+		buffer buf;
+
+		uint8_t tmp[100];
+
+		EXPECT_TRUE(buf.put((uint8_t*)"what ", 5));
+		EXPECT_TRUE(buf.skip(2));
+		EXPECT_EQ(7, buf.position());
+		EXPECT_TRUE(buf.put((uint8_t*)"wonderful day", 13));
+		EXPECT_TRUE(buf.reset());
+		EXPECT_TRUE(buf.put((uint8_t*)"a ", 2));
+		EXPECT_TRUE(buf.reset());
+		EXPECT_TRUE(buf.flip());
+
+		EXPECT_TRUE(buf.skip(5));
+		EXPECT_TRUE(buf.get(tmp, buf.remaining()));
+		EXPECT_EQ(0, memcmp(tmp, "a wonderful day", 15));
+	}
+}
+
+TEST(buffer, clear)
+{
+	buffer buf;
+
+	buf.skip(BLOCK_SIZE * 3 + 100);
+	buf.flip();
+
+	EXPECT_EQ(4 * BLOCK_SIZE, buf.capacity());
+
+	buf.clear();
+
+	EXPECT_EQ(0, buf.position());
+	EXPECT_TRUE(buf.data_length() == 0);
+	EXPECT_TRUE(buf.remaining() == buffer::INVALID_VALUE);
+
+	EXPECT_EQ(4 * BLOCK_SIZE, buf.capacity());	// no shrink
+}
+
+TEST(buffer, endianness)
+{
+	buffer buf;
+
+	uint32_t a = 0x12345678;
+
+	EXPECT_TRUE(buf.put(a, true));
+	EXPECT_TRUE(buf.flip());
+
+	uint8_t tmp[100];
+
+	EXPECT_TRUE(buf.get(tmp, 4));
+	EXPECT_EQ(tmp[0], (uint8_t)0x012);
+	EXPECT_EQ(tmp[1], (uint8_t)0x034);
+	EXPECT_EQ(tmp[2], (uint8_t)0x056);
+	EXPECT_EQ(tmp[3], (uint8_t)0x078);
 	EXPECT_TRUE(buf.compact());
 
-	for(int i=2;i<30;i++) {
-		EXPECT_EQ(o_buf[i-2], (uint8_t)i);
-	}
+	EXPECT_TRUE(buf.put(a, false));
+	EXPECT_TRUE(buf.flip());
 
+	EXPECT_TRUE(buf.get(tmp, 4));
+	EXPECT_EQ(tmp[0], (uint8_t)0x078);
+	EXPECT_EQ(tmp[1], (uint8_t)0x056);
+	EXPECT_EQ(tmp[2], (uint8_t)0x034);
+	EXPECT_EQ(tmp[3], (uint8_t)0x012);
+	EXPECT_TRUE(buf.compact());
 }
 
-TEST(libsax_net_buffer_x, put_get_ints)
+TEST(buffer, put_get_ints)
 {
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	buffer buf;
 
-	uint8_t i8 = 123;
-	uint16_t i16 = 45678;
-	uint32_t i32 = 789212456;
-	uint64_t i64 = 78121324568786123ULL;
+	uint8_t a1 = 46;
+	uint16_t a2 = 44861;
+	uint32_t a3 = 456478156;
+	uint64_t a4 = 98942185786156789LL;
 
-	EXPECT_TRUE(buf.put(i8));
-	EXPECT_TRUE(buf.put(i16));
-	EXPECT_TRUE(buf.put(i32));
-	EXPECT_TRUE(buf.put(i64));
+	buf.put(a1);
+	buf.put(a2);
+	buf.put(a3);
+	buf.put(a4);
+
+	buf.flip();
+
+	uint8_t b1;
+	uint16_t b2;
+	uint32_t b3;
+	uint64_t b4;
+
+	buf.get(b1);
+	buf.get(b2);
+	buf.get(b3);
+	buf.get(b4);
+
+	EXPECT_EQ(a1, b1);
+	EXPECT_EQ(a2, b2);
+	EXPECT_EQ(a3, b3);
+	EXPECT_EQ(a4, b4);
+}
+
+TEST(buffer, peek_ints)
+{
+	buffer buf;
+
+	uint8_t a1 = 164;
+	uint16_t a2 = 8861;
+	uint32_t a3 = 145648156;
+	uint64_t a4 = 9594218578156789LL;
+
+	buf.put(a1);
+	buf.put(a2, false);
+	buf.put(a3, false);
+	buf.put(a4, false);
+
+	buf.flip();
+
+	uint8_t b1;
+	uint16_t b2;
+	uint32_t b3;
+	uint64_t b4;
+
+	buf.peek(b1);
+	EXPECT_EQ(a1, b1);
+	b1 = 0;
+	EXPECT_TRUE(buf.get(b1));
+	EXPECT_EQ(a1, b1);
+
+	buf.peek(b2, false);
+	EXPECT_EQ(a2, b2);
+	b2 = 0;
+	EXPECT_TRUE(buf.get(b2, false));
+	EXPECT_EQ(a2, b2);
+
+	buf.peek(b3, false);
+	EXPECT_EQ(a3, b3);
+	b3 = 0;
+	EXPECT_TRUE(buf.get(b3, false));
+	EXPECT_EQ(a3, b3);
+
+	buf.peek(b4, false);
+	EXPECT_EQ(a4, b4);
+	b4 = 0;
+	EXPECT_TRUE(buf.get(b4, false));
+	EXPECT_EQ(a4, b4);
+}
+
+TEST(buffer, memory_boundary)
+{
+	buffer buf;
+	EXPECT_TRUE(buf.skip(BLOCK_SIZE - 1));
+	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
+	EXPECT_TRUE(buf.put((uint8_t)'a'));
+	EXPECT_EQ(BLOCK_SIZE, buf.capacity());
+	EXPECT_EQ(BLOCK_SIZE, buf.position());
+
+	EXPECT_TRUE(buf.put((uint8_t)'a'));
+	EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
 
 	EXPECT_TRUE(buf.flip());
 
-	uint8_t o8;
-	uint16_t o16;
-	uint32_t o32;
-	uint64_t o64;
-
-	EXPECT_TRUE(buf.get(o8));
-	EXPECT_TRUE(buf.get(o16));
-	EXPECT_TRUE(buf.get(o32));
-	EXPECT_TRUE(buf.get(o64));
-
-	EXPECT_EQ(i8, o8);
-	EXPECT_EQ(i16, o16);
-	EXPECT_EQ(i32, o32);
-	EXPECT_EQ(i64, o64);
+	EXPECT_TRUE(buf.skip(BLOCK_SIZE - 1));
+	uint8_t tmp;
+	EXPECT_TRUE(buf.get(tmp));
+	EXPECT_EQ((uint8_t)'a', tmp);
+	EXPECT_TRUE(buf.compact());
+	EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
+	EXPECT_EQ(1, buf.position());
 }
 
-TEST(libsax_net_buffer_x, put_buf1)
+TEST(buffer, limit)
 {
-	memory_pool mem_pool;
-	buffer buf1(&mem_pool, 1);
-	buffer buf2(&mem_pool, 1);
+	buffer buf;
+	char str[] = "0123456789 testing string";
+	ASSERT_TRUE(buf.put((uint8_t*)str, strlen(str)));
+	ASSERT_TRUE(buf.flip());
 
-	string ss("123456789");
+	ASSERT_EQ(strlen(str), buf.limit(10));
 
-	// test copy_data == true
-	EXPECT_TRUE(buf2.put((uint8_t*)ss.c_str(), ss.size()));
-	EXPECT_TRUE(buf2.flip());
+	char tmp[100];
+	EXPECT_FALSE(buf.get((uint8_t*)tmp, strlen(str)));
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, 10));
+	EXPECT_EQ("0123456789", std::string(tmp, 10));
 
-	EXPECT_TRUE(buf1.put(buf2));
-	EXPECT_TRUE(buf1.flip());
-
-	char tmp[100] = {0};
-
-	EXPECT_TRUE(buf1.get((uint8_t*)tmp, ss.size()));
-	EXPECT_STREQ(tmp, ss.c_str());
-
-	EXPECT_FALSE(buf2.get((uint8_t*)tmp, ss.size()));	// empty
-
+	ASSERT_EQ(10, buf.limit(strlen(str)));
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, strlen(str)-10));
+	EXPECT_EQ(str + 10, std::string(tmp, strlen(str)-10));
 }
 
-TEST(libsax_net_buffer_x, put_buf2)
+TEST(buffer, expend)
 {
-	memory_pool mem_pool;
-	buffer buf1(&mem_pool, 1);
-	buffer buf2(&mem_pool, 1);
+	{
+		buffer buf;
+		EXPECT_EQ(BLOCK_SIZE, buf.capacity());
+		EXPECT_TRUE(buf.skip(BLOCK_SIZE + 1));
+		EXPECT_EQ(2 * BLOCK_SIZE, buf.capacity());
+	}
 
-	string ss("123456789");
-	string ss1("9834567");
+	{
+		buffer buf;
+		char tmp[200];
+		std::string res = "";
 
-	// test copy_data == true
-	EXPECT_TRUE(buf2.put((uint8_t*)ss.c_str(), ss.size()));
-	EXPECT_TRUE(buf2.flip());
+		uint32_t total = 0;
+		while (total <= BLOCK_SIZE) {
+			sprintf(tmp, "%d", rand());
+			total += strlen(tmp);
+			res += tmp;
+			ASSERT_TRUE(buf.put((uint8_t*)tmp, strlen(tmp)));
+		}
 
-	sax::buffer::pos p = buf2.position();
-	p += 2;
-	EXPECT_TRUE(buf2.position(p));
+		ASSERT_TRUE(buf.flip());
+		EXPECT_EQ(res.size(), buf.remaining());
 
-	p = buf1.position();
-	EXPECT_TRUE(buf1.put((uint8_t*)"98765", 5));
-	p += 2;
-	EXPECT_TRUE(buf1.position(p));
-	EXPECT_TRUE(buf1.put(buf2, 5));
-	EXPECT_TRUE(buf1.flip());
-
-	char tmp[100] = {0};
-
-	EXPECT_TRUE(buf1.get((uint8_t*)tmp, ss1.size()));
-	EXPECT_STREQ(tmp, ss1.c_str());
-
-	memset(tmp, 0, sizeof(tmp));
-	EXPECT_TRUE(buf2.rewind());
-	EXPECT_TRUE(buf2.get((uint8_t*)tmp, ss.size()));
-	EXPECT_STREQ(tmp, ss.c_str());
+		char str[2*BLOCK_SIZE];
+		EXPECT_TRUE(buf.get((uint8_t*)str, buf.remaining()));
+		EXPECT_EQ(res, std::string(str, res.size()));
+	}
 }
 
-TEST(normal_string1_l, test1)
+TEST(buffer, moving)
 {
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	{
+		buffer buf;
+		char str[] = "f486gv48dhg7534h86sr4g56w7t5566877ty53j4878t6k1mh23dhj ilfjdlk flafjksdlvnz;vh";
+		buf.put((uint8_t*)str, strlen(str));
+		buf.flip();
+		char tmp[200];
 
-    string a = "livingroom";
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str, 10), std::string(tmp, 10));
+
+		buf.compact();
+		buf.flip();
+
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str+10, 10), std::string(tmp, 10));
+
+		buf.compact();
+		buf.flip();
+
+		buf.get((uint8_t*)tmp, 10);
+		EXPECT_EQ(std::string(str+20, 10), std::string(tmp, 10));
+		EXPECT_EQ(strlen(str) - 30, buf.remaining());
+	}
 }
 
-TEST(normal_string2_l, test1)
+TEST(buffer, direct_put)
 {
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	buffer buf;
+	char* ptr = buf.direct_put(100);
+	memcpy(ptr, "hello", 5);
+	EXPECT_TRUE(buf.commit_put(ptr, 5));
+	EXPECT_FALSE(buf.commit_put(ptr, 5));
+	EXPECT_TRUE(buf.flip());
 
-    char* a = "livingroom";
-    EXPECT_TRUE(buf.put((uint8_t *)a , 10));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a , tmp);
+	char tmp[200] = {0};
+	EXPECT_TRUE(buf.get((uint8_t*)tmp, buf.remaining()));
+	EXPECT_STREQ("hello", tmp);
+
+	EXPECT_FALSE(buf.commit_put(ptr, 123));
+	EXPECT_EQ(NULL, buf.direct_put(10));
+
+	EXPECT_TRUE(buf.compact());
+	ptr = buf.direct_put(100);
+	EXPECT_FALSE(buf.commit_put(ptr, BLOCK_SIZE + 100));
 }
 
-TEST(normal_string3_l, test1)
+TEST(buffer, direct_get)
 {
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	buffer buf;
 
-    char a[100] = {0};
-    strcpy(a,"livingroom");
-    EXPECT_STREQ(a,"livingroom");
-    EXPECT_TRUE(buf.put((uint8_t *)a , 10));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a , tmp);
-}
+	EXPECT_EQ(NULL, buf.direct_get());
+	EXPECT_FALSE(buf.commit_get(NULL, 213));
 
-TEST(error_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
+	buf.put((uint8_t*) "something", 9);
+	buf.put((uint32_t) 123456);
+	buf.flip();
+	char* ptr = buf.direct_get();
+	char tmp[200] = {0};
+	memcpy(tmp, ptr, 9);
+	EXPECT_STREQ("something", tmp);
+	EXPECT_FALSE(buf.commit_get(ptr, 100));
+	EXPECT_TRUE(buf.commit_get(ptr, 9));
+	EXPECT_FALSE(buf.commit_get(ptr, 1));
 
-    char tmp[100] = {};
-    EXPECT_FALSE(buf.get((uint8_t *)tmp , 10));
-}
-
-TEST(error_l, test2)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    EXPECT_FALSE(buf.compact());
-}
-
-TEST(error_l, test3)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    char ch;
-    EXPECT_FALSE(buf.get((uint8_t &)ch));
-}
-
-TEST(error_l, test4)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    EXPECT_FALSE(buf.reset());
-}
-
-TEST(muti_string1_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 9));
-    EXPECT_STREQ("livingroo" , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)1);
-    char ch = 0;
-    EXPECT_TRUE(buf.get((uint8_t &)ch));
-    EXPECT_EQ(ch , 'm');
-}
-
-TEST(muti_string2_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_TRUE(buf.compact());
-
-    string b = a;
-    reverse(b.begin(),b.end());
-    EXPECT_TRUE(buf.put((uint8_t *)b.c_str() , b.size()));
-    EXPECT_TRUE(buf.flip());
-
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)10);
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(b.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-}
-
-TEST(recover_read1_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    EXPECT_TRUE(buf.mark());
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_TRUE(buf.reset());
-    EXPECT_EQ(buf.remaining(), (size_t)10);
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_FALSE(buf.get((uint8_t *)tmp , 10));
-}
-
-TEST(recover_read2_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    buffer::pos p = buf.position();
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_TRUE(buf.position(p));
-    EXPECT_EQ(buf.remaining(), (size_t)10);
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_FALSE(buf.get((uint8_t *)tmp , 10));
-}
-
-TEST(recover_write1_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    EXPECT_TRUE(buf.mark());
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.reset());
-    reverse(a.begin() , a.end());
-    EXPECT_STREQ(a.c_str(),"moorgnivil");
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_TRUE(buf.reset());
-    EXPECT_EQ(buf.remaining(), (size_t)10);
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_FALSE(buf.get((uint8_t *)tmp , 10));
-}
-
-TEST(over_limit1_l, test1)
-{
-	memory_pool mem_pool;
-	buffer buf(&mem_pool, 1);
-
-    string a = "livingroom";
-    buffer::pos p = buf.position();
-    EXPECT_TRUE(buf.limit(p));
-    EXPECT_FALSE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    char tmp[100] = {0};
-    EXPECT_FALSE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_EQ(buf.remaining(), (size_t)0);
-    EXPECT_TRUE(buf.compact());
-    memset(tmp,0,sizeof(tmp));
-    EXPECT_TRUE(buf.put((uint8_t *)a.c_str() , a.size()));
-    EXPECT_TRUE(buf.flip());
-    EXPECT_TRUE(buf.get((uint8_t *)tmp , 10));
-    EXPECT_STREQ(a.c_str() , tmp);
+	uint32_t tmp_num;
+	EXPECT_TRUE(buf.get(tmp_num));
+	EXPECT_EQ(123456U, tmp_num);
 }
 
 int main(int argc, char *argv[])
 {
     testing::InitGoogleTest(&argc, argv);
     srand((unsigned)time(NULL));
-
 
     return RUN_ALL_TESTS();
 }

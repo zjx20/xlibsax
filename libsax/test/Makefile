@@ -6,14 +6,39 @@ INC:=-I.. -I../.. -I/usr/local/include
 LIB:=-L.. -lsax -lws2_32
 else
 INC:=-I.. -I/usr/local/include -I/usr/local/include/thrift
-LIB:=-L.. -L/usr/local/lib/gtest -lsax -lpthread -lgtest -lthrift
+LIB:=-L.. -lsax -lpthread -lgtest #-lthrift
+
+GTEST_DIR=$(shell echo $$GTEST_DIR)
+ifneq ($GTEST_DIR, "")
+INC+=-I$(GTEST_DIR)/include
+LIB+=-L$(GTEST_DIR)/lib/.libs
 endif
 
-all: t_htab.exe t_nio.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.exe t_now.exe \
+endif
+
+CCFLAGS = -Wall -DHAVE_STDINT -DTIXML_USE_STL -DTIXML_USE_TICPP
+
+ifdef RELEASE
+CCFLAGS += -O3 -DNDEBUG -fstrict-aliasing
+else
+CCFLAGS += -g -DDEBUG=1 -D_DEBUG -DSPIN_DEBUG=0 -fstrict-aliasing
+endif
+
+ifdef PROFILE
+CCFLAGS += -pg
+endif
+
+all: t_htab.exe t_logger.exe t_timer.exe t_stage.exe t_fsb.exe t_xml.exe t_now.exe \
 	t_lru.exe t_lru_b.exe t_dict.exe t_md5.exe t_exp.exe t_cru.exe \
 	t_crc.exe t_a32.exe t_pool.exe t_opt.exe t_sha1.exe t_sort.exe \
-	t_ptr.exe t_eda_echo_server.exe t_log.exe t_buffer.exe t_tuple.exe \
-	t_buf_transport.exe t_thrift_utility.exe t_thrift_rpc_serial.exe
+	t_ptr.exe t_eda_echo_server.exe t_buffer.exe t_tuple.exe \
+	#t_buf_transport.exe t_thrift_utility.exe t_thrift_rpc_serial.exe
+
+%.exe: %.cpp ../libsax.a
+	$(CXX) $(CCFLAGS) -o $@ $< $(INC) $(LIB)
+
+%: %.cpp ../libsax.a
+	$(CXX) $(CCFLAGS) -o $@ $< $(INC) $(LIB)
 
 t_htab.exe:
 	$(CC) -Wall -O3 -s -o t_htab.exe t_htab.c $(INC) $(LIB)
@@ -23,9 +48,6 @@ t_logger.exe:
 
 t_nio.exe:
 	$(CXX) -Wall -O3 -s -o t_nio.exe t_nio.cpp $(INC) $(LIB)
-
-t_timer.exe:
-	$(CC) -Wall -O3 -s -o t_timer.exe t_timer.c $(INC) $(LIB)
 
 t_stage.exe:
 	$(CXX) -Wall -O3 -s -o t_stage.exe t_stage.cpp $(INC) $(LIB)
@@ -80,6 +102,17 @@ t_sha1.exe:
 
 t_sort.exe:
 	$(CXX) -Wall -O3 -s -o t_sort.exe t_sort.cpp $(INC) $(LIB)
+	
+t_spin.exe: t_spin.cpp ../libsax.a
+	$(CXX) -Wall -g -o t_spin.exe t_spin.cpp $(INC) $(LIB)
+
+t_slab.exe: t_slab.cpp ../libsax.a
+	$(CXX) -Wall -g -D_DEBUG -o t_slab.exe t_slab.cpp $(INC) $(LIB)
+	
+t_slab_benchmark.exe: t_slab_benchmark.cpp ../libsax.a
+	$(CXX) -Wall -g -D_DEBUG -o t_slab_benchmark.exe t_slab_benchmark.cpp $(INC) $(LIB)
+
+
 
 t_eda_echo_server.exe: t_eda_echo_server.cpp ../libsax.a
 	$(CXX) -Wall -g -o t_eda_echo_server.exe t_eda_echo_server.cpp $(INC) $(LIB)
@@ -110,4 +143,4 @@ t_thrift_rpc_serial.exe: test.thrift t_thrift_rpc_serial.cpp ../libsax.a
 
 clean:
 	@echo Removing target files
-	@rm *.exe -f
+	@rm -f *.exe

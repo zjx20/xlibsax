@@ -1,14 +1,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "os_net.h"
+#include "compiler.h"
 
 //-------------------------------------------------------------------------
 #if defined(WIN32) || defined(_WIN32)
 
 #undef FD_SETSIZE
-#define FD_SETSIZE 1024 
+#define FD_SETSIZE 2048
 
 #include <winsock2.h>
 #include <windows.h>
@@ -47,7 +49,7 @@ int g_set_non_block(int fd)
 /// @brief for windows, using SIO_KEEPALIVE_VALS and WSAIoctl
 /// @note http://msdn.microsoft.com/en-us/library/dd877220(v=VS.85).aspx
 /// part of code is copied from MSTcpIP.h for independence
-int g_set_keepalive(int fd, int idle, int intvl, int probes)
+int g_set_keepalive(int fd, int idle, int intvl, int count)
 {
 	struct s_tcp_keepalive {
 	    u_long  onoff;
@@ -55,7 +57,7 @@ int g_set_keepalive(int fd, int idle, int intvl, int probes)
 	    u_long  keepaliveinterval;
 	};
 	
-	BOOL on = (idle>0 && intvl>0 && probes>0);
+	BOOL on = (idle>0 && intvl>0 && count>0);
 	if (on) {
 		struct s_tcp_keepalive val;
 		DWORD got = 0;
@@ -75,11 +77,6 @@ int g_set_keepalive(int fd, int idle, int intvl, int probes)
 int g_tcp_read(int fd, void *buf, size_t count)
 {
 	return recv(fd, (char *) buf, count, 0);
-}
-
-int g_non_block_delayed(int got)
-{
-	return (got == -1 && WSAGetLastError() == WSAEWOULDBLOCK);
 }
 
 static int inet_aton(const char *addr, struct in_addr *inn)
@@ -120,22 +117,28 @@ int g_set_non_block(int fd)
 		flags |= O_NONBLOCK;
 		return fcntl(fd, F_SETFL, flags);
 	}
-    return 0;
+	return 0;
 }
 
-int g_set_keepalive(int fd, int idle, int intvl, int probes)
+int g_set_keepalive(int fd, int idle, int intvl, int count)
 {
-	int on = (idle>0 && intvl>0 && probes>0);
+	int on = (idle>0 && intvl>0 && count>0);
 	
 	int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	if (ret != 0 || !on) return ret;
-	
+
+#ifdef __APPLE_CC__
+	// there is no way to set retry interval and retry times on mac OSX
+	ret = (0==setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle)));
+#else
 	ret = (0==setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) 
 		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl))
-		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &probes, sizeof(probes)));
+		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &count, sizeof(count)));
+#endif
+
 	if (ret) return 0;
 	
-	on = 0; // diable keepAlive when error
+	on = 0; // disable keepAlive when error
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	return -1;
 }
@@ -145,14 +148,61 @@ int g_tcp_read(int fd, void *buf, size_t count)
 	return read(fd, buf, count);
 }
 
-int g_non_block_delayed(int got)
-{
-	return (got == -1 && (errno == EAGAIN || errno == EINTR));
-}
 #endif
 
 //-------------------------------------------------------------------------
-int g_tcp_listen(const char *addr, int port, int backlog/* = 511*/)
+
+int g_fd_setsize()
+{
+    return FD_SETSIZE;
+}
+
+int g_inet_aton(const char* addr, uint32_t* ip)
+{
+	if (inet_aton(addr, (struct in_addr*) ip) == 0)
+	{
+		struct hostent *he = gethostbyname(addr);
+		if (!he) return -1;
+		memcpy(ip, he->h_addr, sizeof(struct in_addr));
+	}
+	return 0;
+}
+
+const char* g_inet_ntoa(uint32_t ip, char* ip_s, int32_t len)
+{
+	return inet_ntop(AF_INET, &ip, ip_s, len);
+}
+
+uint32_t g_htonl(uint32_t hostlong)
+{
+	return htonl(hostlong);
+}
+
+uint16_t g_htons(uint16_t hostshort)
+{
+	return htons(hostshort);
+}
+
+uint32_t g_ntohl(uint32_t netlong)
+{
+	return ntohl(netlong);
+}
+
+uint16_t g_ntohs(uint16_t netshort)
+{
+	return ntohs(netshort);
+}
+
+int g_set_linger(int fd, int onoff, int linger)
+{
+	struct linger lin = {0};
+	lin.l_onoff  = onoff;
+	lin.l_linger = linger;
+	return setsockopt(fd, SOL_SOCKET, SO_LINGER,
+			(const char*) &lin, sizeof(lin));
+}
+
+int g_tcp_listen(const char *addr, int port, int backlog)
 {
 	int ts, on = 1;
  	struct sockaddr_in sa;
@@ -168,7 +218,7 @@ int g_tcp_listen(const char *addr, int port, int backlog/* = 511*/)
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	if (addr) {
-		if (inet_aton(addr, &sa.sin_addr) == 0) goto quit;
+		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
 	
 	if (bind(ts, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
@@ -179,11 +229,10 @@ quit:
 	CLOSE_SOCKET(ts); return -1;
 }
 
-int g_tcp_accept(int ts, char *ip, int *port)
+int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h)
 {
-	for (;;) {
+	do {
 		struct sockaddr_in sa;
-		struct linger lin={0};
 		socklen_t saLen = sizeof(sa);
 		int on = 1, fd;
 		fd = accept(ts, (struct sockaddr*)&sa, &saLen);
@@ -193,36 +242,26 @@ int g_tcp_accept(int ts, char *ip, int *port)
 #endif
 			return -1;
 		}
-//		// set linger, avoid TIME_WAIT state
-//		lin.l_onoff=1;
-//		lin.l_linger=0;
-//		setsockopt(fd, SOL_SOCKET, SO_LINGER,
-//			(const char *) &lin, sizeof(lin));
 		
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, 
 			(const char *) &on, sizeof(on));
 		
-		if (ip) strcpy(ip, inet_ntoa(sa.sin_addr));
-		if (port) *port = ntohs(sa.sin_port);
+		if (ip_n) *ip_n = sa.sin_addr.s_addr;
+		if (port_h) *port_h = ntohs(sa.sin_port);
 		return fd;
-	}
+	} while(1);
+
+	return -1;	// never reach
 }
 
 int g_tcp_connect(const char *addr, int port, int non_block)
 {
 	int fd, on = 1;
 	struct sockaddr_in sa;
-	struct linger lin={0};
 
 	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		return -1;
 	}
-
-//	// set linger, avoid TIME_WAIT state
-//	lin.l_onoff=1;
-//	lin.l_linger=0;
-//	if (setsockopt(fd, SOL_SOCKET, SO_LINGER,
-//		(const char *) &lin, sizeof(lin)) == -1) goto quit;
 
 	if (non_block && g_set_non_block(fd) != 0) goto quit;
 
@@ -234,13 +273,8 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 	
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short)port);
-	
-	if (inet_aton(addr, &sa.sin_addr) == 0)
-	{
-		struct hostent *he = gethostbyname(addr);
-		if (!he) goto quit;
-		memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
-	}
+
+	if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	
 	if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) return fd;
 
@@ -252,14 +286,70 @@ quit:
 	CLOSE_SOCKET(fd); return -1;
 }
 
-void g_tcp_close(int fd)
+int g_tcp_connect_block(const char *addr, int port, int timeout_ms)
 {
-	CLOSE_SOCKET(fd);
+    int fd, on = 1;
+    struct sockaddr_in sa;
+
+    if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        return -1;
+    }
+
+    if (g_set_non_block(fd) != 0) goto quit;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+        (const char *) &on, sizeof(on)) == -1) goto quit;
+
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
+        (const char *) &on, sizeof(on)) == -1) goto quit;
+
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons((u_short)port);
+
+    if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
+
+    if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
+#if !defined(WIN32) && !defined(_WIN32)
+        if (errno != EINPROGRESS) goto quit;
+#endif
+
+        struct timeval tm;
+        tm.tv_sec  = timeout_ms / 1000;
+        tm.tv_usec = (timeout_ms % 1000) * 1000;
+
+        fd_set rset, wset, eset;
+        FD_ZERO(&rset);
+        FD_SET(fd, &rset);
+
+        FD_ZERO(&wset);
+        FD_SET(fd, &wset);
+
+        FD_ZERO(&eset);
+        FD_SET(fd, &eset);
+
+        if (select(fd + 1, &rset, &wset, &eset, &tm) > 0) {
+            int len=sizeof(int);
+            int err = -1;
+            getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, (socklen_t*)&len);
+            if(err != 0) goto quit;
+            if (FD_ISSET(fd, &eset)) goto quit;
+        }
+        else {
+            // timeout
+            goto quit;
+        }
+
+    }
+
+    return fd;
+
+quit:
+    CLOSE_SOCKET(fd); return -1;
 }
 
 int g_tcp_write(int fd, const void *buf, size_t count)
 {
-    return send(fd, (const char *)buf, count, 0);
+	return send(fd, (const char *)buf, count, 0);
 }
 
 //-------------------------------------------------------------------------
@@ -278,7 +368,7 @@ int g_udp_open(const char *addr, int port)
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	if (addr) {
-		if (inet_aton(addr, &sa.sin_addr) == 0) goto quit;
+		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
 	
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
@@ -288,64 +378,51 @@ quit:
 	CLOSE_SOCKET(fd); return -1;
 }
 
-void g_udp_close(int fd)
-{
-	CLOSE_SOCKET(fd);
-}
-
-int g_udp_read(int fd, void *buf, size_t count, char *ip, int *port)
+int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h)
 {
 	struct sockaddr_in sa;
-	socklen_t len = 0;
-    int got = recvfrom(fd, (char *) buf, 
-    	count, 0, (struct sockaddr *)&sa, &len);
-    if (got > 0) {
-    	if (ip) strcpy(ip, inet_ntoa(sa.sin_addr));
-    	if (port) *port = ntohs(sa.sin_port);
-    }
-    return got;
+	socklen_t len = sizeof(struct sockaddr_in);
+	int got = recvfrom(fd, (char *) buf,
+		count, MSG_TRUNC, (struct sockaddr *)&sa, &len);
+	if (got > 0) {
+		if (ip_n) *ip_n = sa.sin_addr.s_addr;
+		if (port_h) *port_h = ntohs(sa.sin_port);
+	}
+	return got;
 }
 
 int g_udp_write(int fd, const void *buf, int n, const char *ip, int port)
 {
-	struct sockaddr_in sa;
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons((u_short) port);
-	if (inet_aton(ip, &sa.sin_addr) == 0) return -1;
-    return sendto(fd, (const char *) buf, 
-    	n, 0, (struct sockaddr *)&sa, sizeof(sa));
+	uint32_t ip_n;
+	if (g_inet_aton(ip, &ip_n) != 0) return -1;
+	return g_udp_write2(fd, buf, n, ip_n, (uint16_t) port);
 }
 
+int g_udp_write2(int fd, const void *buf, int n, uint32_t ip_n, uint16_t port_h)
+{
+	int closefd = 0;
+	int ret = 0;
+	struct sockaddr_in sa;
+	sa.sin_family = AF_INET;
+	sa.sin_port = htons(port_h);
+	sa.sin_addr.s_addr = ip_n;
+	if (fd < 0) {
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd == -1) return -1;
+		closefd = 1;
+	}
+	ret = sendto(fd, (const char *) buf,
+			n, 0, (struct sockaddr *)&sa, sizeof(sa));
+	if (closefd) CLOSE_SOCKET(fd);
+	return ret;
+}
+
+void g_close_socket(int fd)
+{
+	CLOSE_SOCKET(fd);
+}
 
 //-------------------------------------------------------------------------
-#include "os_api.h"
-
-/* Max number of fd supported */
-#define EDA_SETSIZE (1024*10)
-
-#pragma pack(4)
-/* File event structure */
-typedef struct aeFileEvent {
-    g_eda_func *proc;
-    void *clientData;
-    int mask; /* one of EDA_(READABLE|WRITABLE) */
-} aeFileEvent;
-
-/* A fired event */
-typedef struct aeFiredEvent {
-    int fd;
-    int mask;
-} aeFiredEvent;
-
-/* State of an event based program */
-struct g_eda_t {
-    aeFileEvent events[EDA_SETSIZE]; /* Registered events */
-    aeFiredEvent fired[EDA_SETSIZE]; /* Fired events */
-    void *apidata; /* This is used for polling API specific data */
-    g_mutex_t *mutex;
-    int maxfd;
-};
-#pragma pack()
 
 /* the multiplexing layer supported by this system. */
 #if defined(HAVE_EPOLL)
@@ -353,317 +430,235 @@ struct g_eda_t {
 /*  Linux epoll(2) based */
 #include <sys/epoll.h>
 
-typedef struct aeApiState 
-{
-    int epfd;
-    struct epoll_event events[EDA_SETSIZE];
-} aeApiState;
+typedef struct epoll_event epoll_event;
 
-static int aeApiCreate(g_eda_t *mgr) 
-{
-    aeApiState *state = malloc(sizeof(aeApiState));
+#define MAX_EPOLL_EVENT 1024
 
-    if (!state) return -1;
-    state->epfd = epoll_create(1024); /* 1024 is just an hint for the kernel */
-    if (state->epfd == -1) return -1;
-    mgr->apidata = state;
-    return 0;
+struct g_eda_t {
+	epoll_event events[MAX_EPOLL_EVENT];
+	int         epfd;
+	g_eda_func* proc;
+	void*       user_data;
+};
+
+g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
+{
+	assert(maxfds > 0);
+
+	g_eda_t* h = malloc(sizeof(g_eda_t));
+	if (!h) return NULL;
+
+	h->epfd = epoll_create(1024);	// 1024 just a hint for kernel. for more details, man epoll_create()
+	if (h->epfd == -1) {
+		fprintf(stderr, "error occurred when calling epoll_create() in g_eda_open(). errno: %d %s\n",
+				errno, strerror(errno));
+		free(h);
+		return NULL;
+	}
+
+	h->proc = proc;
+	h->user_data = user_data;
+
+	return h;
 }
 
-static void aeApiFree(g_eda_t *mgr) 
+void g_eda_close(g_eda_t* mgr)
 {
-    aeApiState *state = mgr->apidata;
+	assert(mgr);
 
-    close(state->epfd);
-    free(state);
+	close(mgr->epfd);
+	free(mgr);
 }
 
-static int aeApiAddEvent(g_eda_t *mgr, int fd, int mask) 
+int g_eda_add(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    struct epoll_event ee;
-    /* If the fd was already monitored for some event, we need a MOD
-     * operation. Otherwise we need an ADD operation. */
-    int op = mgr->events[fd].mask == EDA_NONE ?
-            EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+	epoll_event ee;
+	ee.events = 0;
+	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
+	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
+	ee.data.u64 = fd;	// make valgrind silence
 
-    ee.events = 0;
-    mask |= mgr->events[fd].mask; /* Merge old events */
-    if (mask & EDA_READ) ee.events |= EPOLLIN;
-    if (mask & EDA_WRITE) ee.events |= EPOLLOUT;
-    ee.data.u64 = 0; /* avoid valgrind warning */
-    ee.data.fd = fd;
-    if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
-    return 0;
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_ADD, fd, &ee) == 0 )) return 0;
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_add(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
+	return -1;
 }
 
-static void aeApiDelEvent(g_eda_t *mgr, int fd, int delmask) 
+int g_eda_del(g_eda_t* mgr, int fd)
 {
-    aeApiState *state = mgr->apidata;
-    struct epoll_event ee;
-    int mask = mgr->events[fd].mask & (~delmask);
-
-    ee.events = 0;
-    if (mask & EDA_READ) ee.events |= EPOLLIN;
-    if (mask & EDA_WRITE) ee.events |= EPOLLOUT;
-    ee.data.u64 = 0; /* avoid valgrind warning */
-    ee.data.fd = fd;
-    if (mask != EDA_NONE) {
-        epoll_ctl(state->epfd,EPOLL_CTL_MOD,fd,&ee);
-    } else {
-        /* Note, Kernel < 2.6.9 requires a non null event pointer even for
-         * EPOLL_CTL_DEL. */
-        epoll_ctl(state->epfd,EPOLL_CTL_DEL,fd,&ee);
-    }
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_DEL, fd, NULL) == 0 )) return 0;
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_del(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
+	return -1;
 }
 
-static int aeApiPoll(g_eda_t *mgr, struct timeval *tvp) 
+void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    int retval, numevents = 0;
-
-    retval = epoll_wait(state->epfd,state->events,EDA_SETSIZE,
-            tvp ? (tvp->tv_sec*1000 + tvp->tv_usec/1000) : -1);
-    if (retval > 0) {
-        int j;
-
-        numevents = retval;
-        for (j = 0; j < numevents; j++) {
-            int mask = 0;
-            struct epoll_event *e = state->events+j;
-
-            if (e->events & EPOLLIN) mask |= EDA_READ;
-            if (e->events & EPOLLOUT) mask |= EDA_WRITE;
-            if ((e->events & EPOLLERR) || (e->events & EPOLLHUP)) mask |= EDA_ERROR;
-            mgr->fired[j].fd = e->data.fd;
-            mgr->fired[j].mask = mask;
-        }
-    }
-    return numevents;
+	epoll_event ee;
+	ee.events = 0;
+	ee.events |= (mask & EDA_READ) ? EPOLLIN : 0;
+	ee.events |= (mask & EDA_WRITE) ? EPOLLOUT : 0;
+	ee.data.u64 = fd;	// make valgrind silence
+	if (LIKELY( epoll_ctl(mgr->epfd, EPOLL_CTL_MOD, fd, &ee) == 0 )) return;
+	fprintf(stderr, "error occurred when calling epoll_ctl() in g_eda_mod(). fd: %d errno: %d %s\n",
+			fd, errno, strerror(errno));
 }
-#else 
+
+int g_eda_poll(g_eda_t* mgr, int msec)
+{
+	int nfds = epoll_wait(mgr->epfd, mgr->events, MAX_EPOLL_EVENT, msec);
+	epoll_event* ee_ptr = mgr->events;
+	int i;
+	for (i = 0; i < nfds; i++, ee_ptr++) {
+		int fd = (int) ee_ptr->data.u64;
+		int mask = 0;
+		mask |= (ee_ptr->events & EPOLLIN) ? EDA_READ : 0;
+		mask |= (ee_ptr->events & EPOLLOUT) ? EDA_WRITE : 0;
+
+		// add EDA_ERROR automatically
+		mask |= (ee_ptr->events & (EPOLLHUP | EPOLLERR)) ? EDA_ERROR : 0;
+
+		mgr->proc(mgr, fd, mgr->user_data, mask);
+	}
+
+	return nfds;
+}
+
+#else
 
 /* Select()-based */
 #include <string.h>
 
-typedef struct aeApiState 
-{
-    fd_set rfds, wfds;
-    /* We need to have a copy of the fd sets as it's not 
+struct g_eda_t {
+	fd_set rfds, wfds, efds;
+
+    /* We need to have a copy of the fd sets as it's not
      * safe to reuse FD sets after select(). */
-    fd_set _rfds, _wfds;
-} aeApiState;
+	fd_set crfds, cwfds, cefds;
 
-static int aeApiCreate(g_eda_t *mgr) 
+	int         maxfd;
+	g_eda_func* proc;
+	void*       user_data;
+};
+
+g_eda_t* g_eda_open(int maxfds, g_eda_func* proc, void* user_data)
 {
-    aeApiState *state = malloc(sizeof(aeApiState));
+	if (maxfds > FD_SETSIZE) {
+		fprintf(stderr, "maxfds could not exceed FD_SETSIZE=%d.\n", FD_SETSIZE);
+		return NULL;
+	}
 
-    if (!state) return -1;
-    FD_ZERO(&state->rfds);
-    FD_ZERO(&state->wfds);
-    mgr->apidata = state;
-    return 0;
+	assert(maxfds > 0);
+
+	g_eda_t* h = malloc(sizeof(g_eda_t));
+	if (!h) return NULL;
+
+	FD_ZERO(&h->rfds);
+	FD_ZERO(&h->wfds);
+	FD_ZERO(&h->efds);
+
+	h->maxfd = 0;
+	h->proc = proc;
+	h->user_data = user_data;
+
+	return h;
 }
 
-static void aeApiFree(g_eda_t *mgr) 
+void g_eda_close(g_eda_t* mgr)
 {
-    free(mgr->apidata);
+	assert(mgr);
+	free(mgr);
 }
 
-static int aeApiAddEvent(g_eda_t *mgr, int fd, int mask) 
+int g_eda_add(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    if (fd >= FD_SETSIZE) return -1;
+	if (UNLIKELY(fd > FD_SETSIZE)) return -1;
 
-    if (mask & EDA_READ) FD_SET(fd,&state->rfds);
-    if (mask & EDA_WRITE) FD_SET(fd,&state->wfds);
-    return 0;
+	assert(fd >= 0);
+
+	if (mask & EDA_READ) FD_SET(fd, &mgr->rfds);
+	if (mask & EDA_WRITE) FD_SET(fd, &mgr->wfds);
+	FD_SET(fd, &mgr->efds);
+
+	if (mgr->maxfd < fd) mgr->maxfd = fd;
+
+	return 0;
 }
 
-static void aeApiDelEvent(g_eda_t *mgr, int fd, int mask) 
+int g_eda_del(g_eda_t* mgr, int fd)
 {
-    aeApiState *state = mgr->apidata;
-    if (fd >= FD_SETSIZE) return;
+	if (UNLIKELY(fd > FD_SETSIZE)) return -1;
 
-    if (mask & EDA_READ) FD_CLR(fd,&state->rfds);
-    if (mask & EDA_WRITE) FD_CLR(fd,&state->wfds);
+	assert(fd >= 0);
+
+	FD_CLR(fd, &mgr->rfds);
+	FD_CLR(fd, &mgr->wfds);
+	FD_CLR(fd, &mgr->efds);
+
+	if (mgr->maxfd == fd) {
+		int j = fd - 1;
+		do {
+			if (FD_ISSET(j, &mgr->efds)) break;
+			--j;
+		} while (j > 0);
+
+		mgr->maxfd = j;
+	}
+
+	return 0;
 }
 
-static int aeApiPoll(g_eda_t *mgr, struct timeval *tvp) 
+void g_eda_mod(g_eda_t* mgr, int fd, int mask)
 {
-    aeApiState *state = mgr->apidata;
-    int retval, j, numevents = 0;
+	if (UNLIKELY(fd > FD_SETSIZE)) return;
 
-    memcpy(&state->_rfds,&state->rfds,sizeof(fd_set));
-    memcpy(&state->_wfds,&state->wfds,sizeof(fd_set));
+	assert(fd >= 0 && FD_ISSET(fd, &mgr->efds));
 
-    retval = select(mgr->maxfd+1,
-                &state->_rfds,&state->_wfds,NULL,tvp);
+	if ((mask & EDA_READ) ^ FD_ISSET(fd, &mgr->rfds)) {
+		if (mask & EDA_READ) FD_SET(fd, &mgr->rfds);
+		else FD_CLR(fd, &mgr->rfds);
+	}
+
+	if ((mask & EDA_WRITE) ^ FD_ISSET(fd, &mgr->wfds)) {
+		if (mask & EDA_WRITE) FD_SET(fd, &mgr->wfds);
+		else FD_CLR(fd, &mgr->wfds);
+	}
+}
+
+int g_eda_poll(g_eda_t* mgr, int msec)
+{
+	struct timeval tv;
+	tv.tv_sec = msec / 1000;
+	tv.tv_usec = msec % 1000 * 1000;
+
+    memcpy(&mgr->crfds,&mgr->rfds,sizeof(fd_set));
+    memcpy(&mgr->cwfds,&mgr->wfds,sizeof(fd_set));
+    memcpy(&mgr->cefds,&mgr->efds,sizeof(fd_set));
+
+    int retval = select(mgr->maxfd + 1,
+    		&mgr->crfds, &mgr->cwfds, &mgr->cefds, &tv);
+    int count = 0;
     if (retval > 0) {
+    	int j;
         for (j = 0; j <= mgr->maxfd; j++) {
             int mask = 0;
-            aeFileEvent *fe = &mgr->events[j];
 
-            if (fe->mask == EDA_NONE) continue;
-            if (fe->mask & EDA_READ && FD_ISSET(j,&state->_rfds))
-                mask |= EDA_READ;
-            if (fe->mask & EDA_WRITE && FD_ISSET(j,&state->_wfds))
-                mask |= EDA_WRITE;
-            mgr->fired[numevents].fd = j;
-            mgr->fired[numevents].mask = mask;
-            numevents++;
+            if (!FD_ISSET(j, &mgr->efds)) continue;	// a fd always in efds if it has not been deleted
+            if (FD_ISSET(j, &mgr->rfds) && FD_ISSET(j, &mgr->crfds))
+            	mask |= EDA_READ;
+            if (FD_ISSET(j, &mgr->wfds) && FD_ISSET(j, &mgr->cwfds))
+            	mask |= EDA_WRITE;
+            if (FD_ISSET(j, &mgr->cefds))
+            	mask |= EDA_ERROR;
+
+            count++;
+
+            mgr->proc(mgr, j, mgr->user_data, mask);
         }
     }
-    return numevents;
+
+	return count;
 }
 #endif
 
-g_eda_t *g_eda_open(void) 
-{
-    g_eda_t *mgr;
-    int i;
-
-    mgr = malloc(sizeof(*mgr));
-    if (!mgr) return NULL;
-    mgr->maxfd = -1;
-    if (aeApiCreate(mgr) == -1) {
-        free(mgr);
-        return NULL;
-    }
-    mgr->mutex = g_mutex_init();
-    /* Events with mask == EDA_NONE are not set. So let's initialize the
-     * vector with it. */
-    for (i = 0; i < EDA_SETSIZE; i++)
-        mgr->events[i].mask = EDA_NONE;
-    return mgr;
-}
-
-void g_eda_close(g_eda_t *mgr) 
-{
-	g_mutex_enter(mgr->mutex);
-    aeApiFree(mgr);
-    g_mutex_leave(mgr->mutex);
-    g_mutex_free(mgr->mutex);
-    free(mgr);
-}
-
-/* FD_SET is broken on windows (it adds the fd to a set 
- * twice or more, which eventually leads to overflows). 
- * Then we call g_eda_add/g_eda_sub only when changes.
- */
-int g_eda_add(g_eda_t *mgr, int fd, int mask,
-        g_eda_func *proc, void *clientData)
-{
-	int neu, ret=0;
-	aeFileEvent *fe;
-	
-    if (fd >= EDA_SETSIZE) return -1;
-    fe = &mgr->events[fd];
-    
-    g_mutex_enter(mgr->mutex);
-    neu = mask & (EDA_READ | EDA_WRITE | EDA_ERROR);
-    neu &= (~fe->mask);
-    if (neu != EDA_NONE) {
-    	ret = aeApiAddEvent(mgr,fd,neu);
-        if (ret == -1) goto quit;
-        fe->mask |= neu;
-    }
-    fe->proc = proc;
-    fe->clientData = clientData;
-    if (fd > mgr->maxfd) mgr->maxfd = fd;
-    
-    quit:
-    g_mutex_leave(mgr->mutex);
-    return ret;
-}
-
-void g_eda_sub(g_eda_t *mgr, int fd, int mask)
-{
-	aeFileEvent *fe;
-    if (fd >= EDA_SETSIZE) return;
-    fe = &mgr->events[fd];
-	
-    mask &= fe->mask;
-    if (mask == EDA_NONE) return;
-    
-    g_mutex_enter(mgr->mutex);
-    fe->mask &= (~mask);
-    if (fd == mgr->maxfd && fe->mask == EDA_NONE) {
-        /* Update the max fd */
-        int j = mgr->maxfd-1;
-        for (; j >= 0; j--)
-            if (mgr->events[j].mask != EDA_NONE) break;
-        mgr->maxfd = j;
-    }
-    aeApiDelEvent(mgr, fd, mask);
-    g_mutex_leave(mgr->mutex);
-}
-
-void g_eda_set(g_eda_t *mgr, int fd, int mask)
-{
-    aeFileEvent *fe;
-    int add = 0,del = 0;
-    if (fd >= EDA_SETSIZE) return;
-    fe = &mgr->events[fd];
-    add = (~fe->mask & mask);
-    del = (fe->mask & ~mask);
-
-    g_mutex_enter(mgr->mutex);
-    fe->mask = mask;
-    if (fd == mgr->maxfd && fe->mask == EDA_NONE) {
-        /* Update the max fd */
-        int j = mgr->maxfd-1;
-        for (; j >= 0; j--)
-            if (mgr->events[j].mask != EDA_NONE) break;
-        mgr->maxfd = j;
-    }
-    if(fe->mask != EDA_NONE && fd > mgr->maxfd) mgr->maxfd = fd;
-    if(add != 0) aeApiAddEvent(mgr, fd, add);
-    if(del != 0) aeApiDelEvent(mgr, fd, del);
-    g_mutex_leave(mgr->mutex);
-}
-
-/* Process every pending file event */
-int g_eda_loop(g_eda_t *mgr, int msec)
-{
-    int processed = 0, numevents, j;
-    struct timeval tv, *tvp;
-    
-    if (msec >= 0) {
-        tv.tv_sec = (msec/1000);
-        tv.tv_usec = (msec%1000)*1000;
-        tvp = &tv;
-    } else {
-        /* Otherwise we can block */
-        tvp = NULL; /* wait forever */
-    }
-    
-    /* Note that we want call select() even if there are no
-     * file events to process in order to sleep */
-    if (mgr->maxfd == -1) {
-    	if (tvp) select(0, NULL, NULL, NULL, tvp);
-    	return 0;
-    }
-
-	g_mutex_enter(mgr->mutex);
-    numevents = aeApiPoll(mgr, tvp);
-    g_mutex_leave(mgr->mutex);
-    
-    for (j = 0; j < numevents; j++) {
-        aeFileEvent *fe = &mgr->events[mgr->fired[j].fd];
-        int mask = mgr->fired[j].mask;
-        int fd = mgr->fired[j].fd;
-	/* note the fe->mask & mask & ... code: maybe an already processed
-         * event removed an element that fired and we still didn't
-         * processed, so we check if the event is still valid. */
-        mask &= fe->mask;
-        if (mask & (EDA_READ|EDA_WRITE|EDA_ERROR)) {
-            fe->proc(mgr,fd,fe->clientData,mask);
-        }
-        processed++;
-    }
-    
-    return processed; /* return the number of processed */
-}
 //-------------------------------------------------------------------------
-

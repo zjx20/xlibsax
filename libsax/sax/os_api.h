@@ -10,7 +10,7 @@
 ///  -# g_mutex_t: mutex object for thread
 ///  -# g_thread_t: lightweighed thread object
 ///  -# g_share_t: R/W locker for thread
-///  -# g_atom_t: R/W locker based on atom
+///  -# g_spin_t: R/W locker based on atomic operators
 ///  -# g_cond_t: condition object for thread
 /// 
 /// Three types of IO interfaces are designed for different tasks:
@@ -26,6 +26,7 @@
 /// handles the overflowed part with the general file IO.
 /// @}
 
+#include <time.h>
 #include "os_types.h"
 
 #if defined(__cplusplus) || defined(c_plusplus)
@@ -239,7 +240,7 @@ int g_flock2(void* fp, int op);
 
 
 //-------------------------------------------------------------------------
-//-------- (d) API for thread/mutex/atom/semp/condition objects -----------
+//-------- (d) API for thread/mutex/spin/semp/condition objects -----------
 //-------------------------------------------------------------------------
 typedef struct g_mutex_t g_mutex_t;
 
@@ -272,19 +273,22 @@ void g_mutex_leave(g_mutex_t *p);
 typedef void* g_thread_t;
 
 /// @brief (outer) create and start a thread.
-g_thread_t g_thread_start(long (*func)(void *), void *user);
+g_thread_t g_thread_start(void* (*func)(void *), void *user);
 
 /// @brief (outer) wait for the thread to finish.
 int g_thread_join(g_thread_t th, long *val);
 
 /// @brief (outer) create and start a detached thread.
-int g_thread_start_detached(long (*func)(void *), void *user);
+int g_thread_start_detached(void* (*func)(void *), void *user);
 
 /// @brief (inner) suspend execution of the current thread.
 int g_thread_sleep(double sec);
 
 /// @brief (inner) yield the processor from the running thread.
 void g_thread_yield();
+
+/// @brief (inner) put a pause instruction, hinting the processor that "this is a spin loop."
+void g_thread_pause();
 
 /// @brief (inner) terminate the running thread.
 void g_thread_exit(long val);
@@ -313,7 +317,7 @@ int g_timezone();
 uint64_t g_now_uid(); // unique tick as ID
 
 /// @brief convert time_t to struct tm
-void g_localtime(const void *_sec, void *_tp, long offset);
+struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset);
 
 //-------------------------------------------------------------------------
 typedef struct g_share_t g_share_t;
@@ -337,32 +341,40 @@ int  g_share_try_lockr(g_share_t *s, double sec);
 void g_share_unlock(g_share_t *s);
 
 //-------------------------------------------------------------------------
-typedef struct g_atom_t g_atom_t;
-
-/// @brief lock a atom lock
-void g_atom_enter(g_atom_t *a);
-
-/// @brief release a atom lock
-void g_atom_leave(g_atom_t *a);
-
+typedef struct g_spin_t g_spin_t;
 
 /// @brief initialize
-g_atom_t *g_atom_init(void);
+g_spin_t* g_spin_init();
 
 /// @brief deconstruct
-void g_atom_free(g_atom_t *a);
+void g_spin_free(g_spin_t* s);
 
+/// @brief lock a spin lock
+void g_spin_enter(g_spin_t* s, int spin);
+
+/// @brief release a spin lock
+void g_spin_leave(g_spin_t* s);
+
+//-------------------------------------------------------------------------
+typedef struct g_spin_rw_t g_spin_rw_t;
+
+/// @brief initialize
+g_spin_rw_t* g_spin_rw_init(int prefer_writer);
+
+/// @brief deconstruct
+void g_spin_rw_free(g_spin_rw_t* s);
 
 /// @brief try to get a writer lock.
-void g_atom_lockw(g_atom_t *s);
-int  g_atom_try_lockw(g_atom_t *s, double sec);
+void g_spin_lockw(g_spin_rw_t* s, int spin);
+int  g_spin_try_lockw(g_spin_rw_t* s, double sec, int spin);
 
 /// @brief try to get a reader lock.
-void g_atom_lockr(g_atom_t *s);
-int  g_atom_try_lockr(g_atom_t *s, double sec);
+void g_spin_lockr(g_spin_rw_t* s, int spin);
+int  g_spin_try_lockr(g_spin_rw_t* s, double sec, int spin);
 
 /// @brief release the lock.
-void g_atom_unlock(g_atom_t *s);
+void g_spin_unlockw(g_spin_rw_t* s);
+void g_spin_unlockr(g_spin_rw_t* s);
 
 //-------------------------------------------------------------------------
 
@@ -469,6 +481,15 @@ int g_shm_sync(const shm_t *map, uint32_t s, uint32_t c);
 /// @return memory allocation granularity
 int g_shm_unit(void);
 
+/// @brief Allocate numbers of entire page(g_shm_unit()) memory.
+/// @param pages number of page would like to allocate.
+/// @return NULL for failed, otherwise the returning address is align
+///         with system page boundary.
+void* g_shm_alloc_pages(uint32_t pages);
+
+/// @brief Deallocate memory that allocated from g_shm_alloc_pages().
+/// @param ptr memory address to free.
+void g_shm_free_pages(void* ptr);
 
 //-------------------------------------------------------------------------
 //------------- (g) API for mixed file (shm_t + f64_t) --------------------
