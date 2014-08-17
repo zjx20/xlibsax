@@ -35,7 +35,7 @@ class log_file_writer
 {
 public:
 	log_file_writer(const std::string& logfile_name, int32_t max_logfiles,
-			size_t size_per_logfile, log_level level = 0)
+			size_t size_per_logfile, log_level level = (log_level)0)
 	{
 		_logfile_name = logfile_name;
 		_max_logfiles = max_logfiles;

@@ -17,7 +17,7 @@
 
 volatile bool finish = false;
 
-#define KEEP_ALIVE 1
+#define KEEP_ALIVE 0
 
 #if KEEP_ALIVE
 char response[] = "HTTP/1.1 200 OK\nServer: libsax/0.01\nDate: Thu, 30 Aug 2012 08:20:48 GMT\nContent-Type: text/html\nContent-Length: 151\nLast-Modified: Thu, 30 Aug 2012 03:04:37 GMT\nConnection: keep-alive\nAccept-Ranges: bytes\n\n<html>\n<head>\n<title>Welcome to nginx!</title>\n</head>\n<body bgcolor=\"white\" text=\"black\">\n<center><h1>Welcome to nginx!</h1></center>\n</body>\n</html>\n";

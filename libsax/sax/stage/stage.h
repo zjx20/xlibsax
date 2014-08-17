@@ -146,7 +146,7 @@ public:
 	inline EVENT_TYPE* allocate_event(uint64_t shard_key = 0, bool wait = true)
 	{
 		return _queues[_dispatcher->dispatch(EVENT_TYPE::ID, shard_key)]->
-				allocate_event<EVENT_TYPE>(wait);
+				template allocate_event<EVENT_TYPE>(wait);
 	}
 
 	void push_event(event_type* ev)

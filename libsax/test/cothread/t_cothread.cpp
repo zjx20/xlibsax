@@ -102,13 +102,13 @@ void* thread_func(void* params)
 {
 	co_thread_init();
 
-	sax::cothread_mgr mgr(COTHREAD_COUNT, COTHREAD_STACKSIZE);
-
 	printf("new thread started.\n");
 
 	std::vector<char> channel;
 
 	echo_cothread_factory factory(&channel);
+
+	sax::cothread_mgr mgr(COTHREAD_COUNT, COTHREAD_STACKSIZE);
 
 	mgr.init(&factory);
 
