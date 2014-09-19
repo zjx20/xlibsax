@@ -18,6 +18,7 @@
 #include "buffer.h"
 #include "sax/compiler.h"
 #include "sax/os_types.h"
+#include "sax/cpputil.h"    // for bitwise_cast()
 
 namespace sax {
 
@@ -339,30 +340,35 @@ public:
 
 	uint32_t readByte(int8_t& byte)
 	{
+	    // TODO: this implementation will break the strict aliasing rule
 		_buf->get(static_cast<uint8_t&>(byte));
 		return 1;
 	}
 
 	uint32_t readI16(int16_t& i16)
 	{
+	    // TODO: this implementation will break the strict aliasing rule
 		_buf->get(static_cast<uint16_t&>(i16), true);
 		return 2;
 	}
 
 	uint32_t readI32(int32_t& i32)
 	{
+	    // TODO: this implementation will break the strict aliasing rule
 		_buf->get(static_cast<uint32_t&>(i32), true);
 		return 4;
 	}
 
 	uint32_t readI64(int64_t& i64)
 	{
+	    // TODO: this implementation will break the strict aliasing rule
 		_buf->get(static_cast<uint64_t&>(i64), true);
 		return 8;
 	}
 
 	uint32_t readDouble(double& dub)
 	{
+	    // TODO: this implementation will break the strict aliasing rule
 		STATIC_ASSERT(sizeof(double) == sizeof(uint64_t), double_is_not_8_bytes);
 		STATIC_ASSERT(std::numeric_limits<double>::is_iec559, not_iec559);
 
