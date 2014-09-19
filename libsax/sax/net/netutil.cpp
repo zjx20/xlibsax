@@ -387,7 +387,9 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 		int ret = g_tcp_write(tid.fd, buf, length);
 		if (LIKELY(ret >= 0)) {
 			if (UNLIKELY(ret < length)) {
-				if (write_buf == NULL) write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+				if (write_buf == NULL) {
+				    write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+				}
 
 				// put the rest of data to write buffer, send it next time
 				if (UNLIKELY(write_buf->put((uint8_t*) buf + ret,
@@ -417,7 +419,9 @@ bool transport::send(const id& tid, const char* buf, int32_t length)
 				return false;
 			}
 			else {
-				if (write_buf == NULL) write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+				if (write_buf == NULL) {
+				    write_buf = new linked_buffer();	// TODO: may throw std::bad_alloc
+				}
 
 				// io buffer is full
 				if (UNLIKELY(write_buf->put((uint8_t*) buf, length) == false)) {
