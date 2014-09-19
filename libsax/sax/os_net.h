@@ -39,6 +39,12 @@ int g_udp_read(int fd, void *buf, size_t count, uint32_t* ip_n, uint16_t* port_h
 int g_udp_write(int fd, const void *buf, int n, const char *ip, int port);
 int g_udp_write2(int fd, const void *buf, int n, uint32_t ip_n, uint16_t port_h);
 
+#define SHUTDOWN_READ  0
+#define SHUTDOWN_WRITE 1
+#define SHUTDOWN_BOTH  2
+
+void g_shutdown_socket(int fd, int how); // set "how" with SHUTDOWN_*
+
 void g_close_socket(int fd);
 
 int g_set_non_block(int fd);

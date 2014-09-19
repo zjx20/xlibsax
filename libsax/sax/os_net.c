@@ -18,6 +18,10 @@
 typedef int socklen_t;
 #define CLOSE_SOCKET(s) closesocket(s)
 
+#define _SHUTDOWN_READ  SD_RECEIVE
+#define _SHUTDOWN_WRITE SD_SEND
+#define _SHUTDOWN_BOTH  SD_BOTH
+
 int g_net_start()
 {
 	WSADATA wsa;
@@ -99,6 +103,10 @@ static int inet_aton(const char *addr, struct in_addr *inn)
 #include <errno.h>
 
 #define CLOSE_SOCKET(s) close(s)
+
+#define _SHUTDOWN_READ  SHUT_RD
+#define _SHUTDOWN_WRITE SHUT_WR
+#define _SHUTDOWN_BOTH  SHUT_RDWR
 
 int g_net_start()
 {
@@ -417,6 +425,15 @@ int g_udp_write2(int fd, const void *buf, int n, uint32_t ip_n, uint16_t port_h)
 	return ret;
 }
 
+void g_shutdown_socket(int fd, int how)
+{
+    switch(how) {
+    case SHUTDOWN_READ:  shutdown(fd, _SHUTDOWN_READ);  break;
+    case SHUTDOWN_WRITE: shutdown(fd, _SHUTDOWN_WRITE); break;
+    case SHUTDOWN_BOTH:  shutdown(fd, _SHUTDOWN_BOTH);  break;
+    }
+}
+
 void g_close_socket(int fd)
 {
 	CLOSE_SOCKET(fd);
@@ -595,7 +612,8 @@ int g_eda_del(g_eda_t* mgr, int fd)
 	FD_CLR(fd, &mgr->wfds);
 	FD_CLR(fd, &mgr->efds);
 
-	if (mgr->maxfd == fd) {
+	if (mgr->maxfd == fd && fd != 0) {
+	    // be careful, fd can be zero...
 		int j = fd - 1;
 		do {
 			if (FD_ISSET(j, &mgr->efds)) break;
