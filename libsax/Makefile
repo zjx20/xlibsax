@@ -49,7 +49,7 @@ else
 #CCFLAGS += -DHAVE_EPOLL
 endif
 
-CXXFLAGS = $(CCFLAGS) -D__cplusplus 
+CXXFLAGS = $(CCFLAGS) 
 
 
 all: $(TARGET)
