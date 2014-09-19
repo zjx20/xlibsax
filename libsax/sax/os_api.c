@@ -1728,6 +1728,13 @@ void* g_shm_alloc_pages(uint32_t pages)
 # define O_BINARY 0
 #endif
 
+#ifndef S_IREAD
+#  define S_IREAD S_IRUSR
+#endif
+#ifndef S_IWRITE
+#  define S_IWRITE S_IWUSR
+#endif
+
 int g_create_dir(const char *dir)
 {
 #if defined(__MINGW32__)
