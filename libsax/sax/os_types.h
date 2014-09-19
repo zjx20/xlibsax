@@ -14,6 +14,7 @@
 #endif//__STDC_FORMAT_MACROS
 
 #include <stddef.h>
+#include "compiler.h"
 
 #ifndef _STDINT_H
 #if defined(HAVE_STDINT) || defined(__GNUC__)
@@ -63,13 +64,8 @@
 
         #define IS_LITTLE_ENDIAN 1
     #else
-        #ifdef _MSC_VER
-        #pragma message("WARNING: Cannot detect byte order for this target, \
-            please specify it by defining macro IS_LITTLE_ENDIAN .")
-        #else
-        #warning "Cannot detect byte order for this target, \
-            please specify it by defining macro IS_LITTLE_ENDIAN ."
-        #endif
+        COMPILE_ERROR("Cannot detect byte order for this target, " \
+                "please specify it by defining macro IS_LITTLE_ENDIAN .")
     #endif
 #endif//IS_LITTLE_ENDIAN
 
