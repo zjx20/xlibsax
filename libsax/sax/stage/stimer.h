@@ -26,17 +26,16 @@ class stimer_handler : public handler_base
 
 public:
 
-	stimer_handler() : _timer(NULL), _destroying(false) {}
+	stimer_handler() : _timer(NULL), _last_ms(g_now_ms()) {}
 
 	virtual ~stimer_handler()
 	{
-		_destroying = true;
-		if (_timer) g_timer_destroy(_timer, 1);
+		if (_timer) g_timer_destroy(_timer, _free_func);
 	}
 
 	virtual bool init(void* param)
 	{
-		_timer = g_timer_create(0);
+		_timer = g_timer_create();
 		return _timer != NULL;
 	}
 
@@ -67,7 +66,11 @@ public:
 
 	void poll_timer()
 	{
-		g_timer_poll(_timer, 0);
+		uint64_t now_ms = g_now_ms();
+		if (LIKELY(now_ms > _last_ms)) {
+			g_timer_poll(_timer, now_ms - _last_ms);
+		}
+		_last_ms = now_ms;
 	}
 
 private:
@@ -76,19 +79,23 @@ private:
 	{
 		timer_param* p = (timer_param*) param;
 
-		if (LIKELY(!p->self->_destroying)) {
-			timer_timeout_event* invoke =
-					p->biz_stage->allocate_event<timer_timeout_event>(p->trans_id);
-			invoke->trans_id = p->trans_id;
-			invoke->invoke_param = p->param;
-			p->biz_stage->push_event(invoke);
-		}
+		timer_timeout_event* invoke =
+				p->biz_stage->allocate_event<timer_timeout_event>(p->trans_id);
+		invoke->trans_id = p->trans_id;
+		invoke->invoke_param = p->param;
+		p->biz_stage->push_event(invoke);
 
 		delete p;
 	}
 
+	static void _free_func(void* user_data)
+	{
+		timer_param* p = (timer_param*) user_data;
+		delete p;
+	}
+
 	g_timer_t* _timer;
-	bool _destroying;
+	uint64_t _last_ms;
 };
 
 class stimer_threadobj : public thread_obj

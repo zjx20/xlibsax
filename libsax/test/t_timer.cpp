@@ -11,9 +11,14 @@ static void inc_one(g_timer_handle_t handle, void* param)
 	if (param != NULL) (*((int*)param))++;
 }
 
+static void dec_one_free(void* param)
+{
+	if (param != NULL) (*((int*)param))--;
+}
+
 TEST(timer, basic_test1)
 {
-	g_timer_t* timer = g_timer_create(1);
+	g_timer_t* timer = g_timer_create();
 
 	volatile int a = 100;
 
@@ -29,35 +34,35 @@ TEST(timer, basic_test1)
 	g_timer_poll(timer, 2);
 	ASSERT_EQ(102, a);
 
-	g_timer_poll(timer, 5);
+	g_timer_poll(timer, 3);
 	ASSERT_EQ(104, a);
 
 	ASSERT_EQ(0, g_timer_cancel(timer, ch, NULL));
 	ASSERT_EQ(1, g_timer_cancel(timer, ch, NULL));
 
-	g_timer_poll(timer, 10);
+	g_timer_poll(timer, 5);
 	ASSERT_EQ(105, a);
 
 	ASSERT_TRUE(NULL != g_timer_start(timer, 256, inc_one, (void*) &a));
 
-	g_timer_poll(timer, 265);
+	g_timer_poll(timer, 255);
 	ASSERT_EQ(105, a);
-	g_timer_poll(timer, 267);
+	g_timer_poll(timer, 1);
 	ASSERT_EQ(106, a);
 
 	ASSERT_TRUE(NULL != g_timer_start(timer, 0x01000100, inc_one, (void*) &a));
 
-	g_timer_poll(timer, 0x01000000);
+	g_timer_poll(timer, 0x01000100 - 1);
 	ASSERT_EQ(106, a);
-	g_timer_poll(timer, 0x01000100 + 268);
+	g_timer_poll(timer, 1);
 	ASSERT_EQ(107, a);
 
-	g_timer_destroy(timer, 0);
+	g_timer_destroy(timer, NULL);
 }
 
 TEST(timer, basic_test2)
 {
-	g_timer_t* timer = g_timer_create(0);
+	g_timer_t* timer = g_timer_create();
 
 	volatile int a = 100;
 
@@ -67,30 +72,37 @@ TEST(timer, basic_test2)
 	ASSERT_TRUE(NULL != g_timer_start(timer, 600, inc_one, (void*) &a));
 	ASSERT_TRUE(NULL != g_timer_start(timer, 900, inc_one, (void*) &a));
 
+	uint64_t now_ms = g_now_ms();
 	g_thread_sleep(0.200);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, g_now_ms() - now_ms);
 	ASSERT_EQ(102, a);
 
+	now_ms = g_now_ms();
+
 	g_thread_sleep(0.500);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, g_now_ms() - now_ms);
 	ASSERT_EQ(104, a);
 
+	now_ms = g_now_ms();
+
 	g_thread_sleep(0.300);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, g_now_ms() - now_ms);
 	ASSERT_EQ(105, a);
 
 	ASSERT_TRUE(NULL != g_timer_start(timer, 500, inc_one, (void*) &a));
 
+	now_ms = g_now_ms();
+
 	g_thread_sleep(0.6);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, g_now_ms() - now_ms);
 	ASSERT_EQ(106, a);
 
-	g_timer_destroy(timer, 0);
+	g_timer_destroy(timer, NULL);
 }
 
 TEST(timer, linkedlist)
 {
-	g_timer_t* timer = g_timer_create(0);
+	g_timer_t* timer = g_timer_create();
 
 	ASSERT_EQ(0, g_timer_count(timer));
 
@@ -120,12 +132,12 @@ TEST(timer, linkedlist)
 	ASSERT_EQ(0, g_timer_cancel(timer, handle2, NULL));
 	ASSERT_EQ(0, g_timer_count(timer));
 
-	g_timer_destroy(timer, 0);
+	g_timer_destroy(timer, NULL);
 }
 
-TEST(timer, destroy_fire_all)
+TEST(timer, destroy_free_func)
 {
-	g_timer_t* timer = g_timer_create(0);
+	g_timer_t* timer = g_timer_create();
 
 	volatile int a = 100;
 
@@ -135,34 +147,12 @@ TEST(timer, destroy_fire_all)
 	ASSERT_TRUE(NULL != g_timer_start(timer, 600, inc_one, (void*) &a));
 	ASSERT_TRUE(NULL != g_timer_start(timer, 900, inc_one, (void*) &a));
 
-	g_thread_sleep(0.200);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, 200);
 	ASSERT_EQ(102, a);
 
-	g_timer_destroy(timer, 1);
+	g_timer_destroy(timer, dec_one_free);
 
-	ASSERT_EQ(105, a);
-}
-
-TEST(timer, destroy_not_fire_all)
-{
-	g_timer_t* timer = g_timer_create(0);
-
-	volatile int a = 100;
-
-	ASSERT_TRUE(NULL != g_timer_start(timer, 100, inc_one, (void*) &a));
-	ASSERT_TRUE(NULL != g_timer_start(timer, 100, inc_one, (void*) &a));
-	ASSERT_TRUE(NULL != g_timer_start(timer, 500, inc_one, (void*) &a));
-	ASSERT_TRUE(NULL != g_timer_start(timer, 600, inc_one, (void*) &a));
-	ASSERT_TRUE(NULL != g_timer_start(timer, 900, inc_one, (void*) &a));
-
-	g_thread_sleep(0.200);
-	g_timer_poll(timer, 0);
-	ASSERT_EQ(102, a);
-
-	g_timer_destroy(timer, 0);
-
-	ASSERT_EQ(102, a);
+	ASSERT_EQ(99, a);
 }
 
 static void cancel_and_add(g_timer_handle_t handle, void* param)
@@ -184,7 +174,7 @@ TEST(timer, cancel_when_firing)
 
 	g_timer_handle_t ch = NULL;
 
-	g_timer_t* timer = g_timer_create(0);
+	g_timer_t* timer = g_timer_create();
 
 	void* param1[] = {timer, &ch, &a};
 	void* param2[] = {timer, &ch, &b};
@@ -197,14 +187,42 @@ TEST(timer, cancel_when_firing)
 
 	ASSERT_TRUE(NULL != g_timer_start(timer, 100, cancel_and_add, param3));
 
-	g_thread_sleep(0.200);
-	g_timer_poll(timer, 0);
+	g_timer_poll(timer, 200);
 
 	ASSERT_EQ(101, a);
 	ASSERT_EQ(100, b);
 	ASSERT_EQ(101, c);
 
-	g_timer_destroy(timer, 0);
+	g_timer_destroy(timer, NULL);
+}
+
+TEST(timer, uint32_overflow)
+{
+	uint32_t umax = ~0u;
+	g_timer_t* timer = g_timer_create2(umax - 100);
+
+	volatile int a = 100;
+
+	ASSERT_TRUE(NULL != g_timer_start(timer, 60, inc_one, (void*) &a));
+
+	g_timer_poll(timer, 40);
+	ASSERT_EQ(100, a);
+	g_timer_poll(timer, 60);
+	ASSERT_EQ(101, a);
+
+	ASSERT_TRUE(NULL != g_timer_start(timer, 10, inc_one, (void*) &a));
+
+	g_timer_poll(timer, 20);
+	ASSERT_EQ(102, a);
+
+	// schedule to level 2, the fire moment is (umax + 19 + 30000)
+	ASSERT_TRUE(NULL != g_timer_start(timer, 30000, inc_one, (void*) &a));
+
+	g_timer_poll(timer, 29999);
+	ASSERT_EQ(102, a);
+
+	g_timer_poll(timer, 1);
+	ASSERT_EQ(103, a);
 }
 
 class test_handler : public sax::handler_base
@@ -222,7 +240,7 @@ public:
 		case sax::timer_timeout_event::ID:
 		{
 			sax::timer_timeout_event* event = (sax::timer_timeout_event*) ev;
-			printf("test_handler recv timer_timeout_event. trans_id: %lu.\n", event->trans_id);
+			printf("test_handler recv timer_timeout_event. trans_id: %llu.\n", event->trans_id);
 			(*((int*)event->invoke_param))++;
 			break;
 		}
@@ -304,8 +322,8 @@ TEST(stimer, basic_test)
 
 int main( int argc, char *argv[] )
 {
-    testing::InitGoogleTest(&argc, argv);
-    srand((unsigned)time(NULL));
+	testing::InitGoogleTest(&argc, argv);
+	srand((unsigned)time(NULL));
 
-    return RUN_ALL_TESTS();
+	return RUN_ALL_TESTS();
 }
