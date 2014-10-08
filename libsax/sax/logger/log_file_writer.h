@@ -124,8 +124,14 @@ private:
 		}
 
 		FILE* file = fopen(_logfile_name.c_str(), "a");
-		assert(file != NULL);
+		if (file == NULL) {
+			fprintf(stderr, "[Error] Failed to open file (%s), log to stdout instead.", _logfile_name.c_str());
+			_curr_logfile = stdout;
+			_curr_size = 0;
+			return;
+		}
 
+		setvbuf(file, NULL, _IOLBF, BUFSIZ);    // TODO: test performance degradation
 		fseek(file, 0, SEEK_END);
 
 		_curr_size = ftell(file);
