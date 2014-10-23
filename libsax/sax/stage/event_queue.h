@@ -151,7 +151,7 @@ private:
 		// there are not enough space to allocate in the rear,
 		// so roll back to the front.
 		bool skip_flag = cond1 & !cond2;
-		if (UNLIKELY(skip_flag)) new_alloc_pos = 0;
+		if (UNLIKELY(skip_flag)) new_alloc_pos = 0; // TODO: new_alloc_pos &= (unsigned)(-skip_flag)
 
 		//
 		// if (cond1 & cond2) == true, then it can allocate from the rear;
