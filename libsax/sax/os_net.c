@@ -27,8 +27,8 @@ int g_net_start()
 	WSADATA wsa;
 	int err = WSAStartup(MAKEWORD(2, 2), &wsa);
 	if (err != 0) return err;
-	
-	if (LOBYTE(wsa.wVersion) != 2 || 
+
+	if (LOBYTE(wsa.wVersion) != 2 ||
 		HIBYTE(wsa.wVersion) != 2)
 	{
 		WSACleanup(); return -1;
@@ -60,7 +60,7 @@ int g_set_keepalive(int fd, int idle, int intvl, int count)
 	    u_long  keepalivetime;
 	    u_long  keepaliveinterval;
 	};
-	
+
 	BOOL on = (idle>0 && intvl>0 && count>0);
 	if (on) {
 		struct s_tcp_keepalive val;
@@ -74,7 +74,7 @@ int g_set_keepalive(int fd, int idle, int intvl, int count)
 		return (WSAIoctl(fd, SIO_KEEPALIVE_VALS, &val, sizeof(val),
 			NULL, 0, &got, NULL, NULL) == SOCKET_ERROR ? -1 : 0);
 	}
-	return setsockopt(fd, SOL_SOCKET, 
+	return setsockopt(fd, SOL_SOCKET,
 		SO_KEEPALIVE, (const char *) &on, sizeof(on));
 }
 
@@ -131,7 +131,7 @@ int g_set_non_block(int fd)
 int g_set_keepalive(int fd, int idle, int intvl, int count)
 {
 	int on = (idle>0 && intvl>0 && count>0);
-	
+
 	int ret = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	if (ret != 0 || !on) return ret;
 
@@ -139,13 +139,13 @@ int g_set_keepalive(int fd, int idle, int intvl, int count)
 	// there is no way to set retry interval and retry times on mac OSX
 	ret = (0==setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle)));
 #else
-	ret = (0==setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) 
+	ret = (0==setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &idle, sizeof(idle))
 		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl))
 		&& 0==setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &count, sizeof(count)));
 #endif
 
 	if (ret) return 0;
-	
+
 	on = 0; // disable keepAlive when error
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	return -1;
@@ -214,25 +214,25 @@ int g_tcp_listen(const char *addr, int port, int backlog)
 {
 	int ts, on = 1;
  	struct sockaddr_in sa;
-	
+
 	if ((ts = socket(AF_INET, SOCK_STREAM, 0)) == -1) return -1;
-	
-	if (setsockopt(ts, SOL_SOCKET, SO_REUSEADDR, 
+
+	if (setsockopt(ts, SOL_SOCKET, SO_REUSEADDR,
 		(const char *) &on, sizeof(on)) == -1) goto quit;
-	
+
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short)port);
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
-	
+
 	if (addr) {
 		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
-	
+
 	if (bind(ts, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
-	
+
 	if (listen(ts, backlog) != -1) return ts;
-	
+
 quit:
 	CLOSE_SOCKET(ts); return -1;
 }
@@ -250,10 +250,10 @@ int g_tcp_accept(int ts, uint32_t* ip_n, uint16_t* port_h)
 #endif
 			return -1;
 		}
-		
-		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, 
+
+		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
 			(const char *) &on, sizeof(on));
-		
+
 		if (ip_n) *ip_n = sa.sin_addr.s_addr;
 		if (port_h) *port_h = ntohs(sa.sin_port);
 		return fd;
@@ -273,17 +273,17 @@ int g_tcp_connect(const char *addr, int port, int non_block)
 
 	if (non_block && g_set_non_block(fd) != 0) goto quit;
 
-	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 		(const char *) &on, sizeof(on)) == -1) goto quit;
-	
+
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
 		(const char *) &on, sizeof(on)) == -1) goto quit;
-	
+
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short)port);
 
 	if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
-	
+
 	if (connect(fd, (struct sockaddr*)&sa, sizeof(sa)) == 0) return fd;
 
 #if !defined(WIN32) && !defined(_WIN32)
@@ -365,23 +365,23 @@ int g_udp_open(const char *addr, int port)
 {
 	int fd;
 	struct sockaddr_in sa;
-	
+
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 		return -1;
 	}
-	
+
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons((u_short)port);
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
-	
+
 	if (addr) {
 		if (g_inet_aton(addr, &sa.sin_addr.s_addr) != 0) goto quit;
 	}
-	
+
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa)) == -1) goto quit;
 	return fd;
-	
+
 quit:
 	CLOSE_SOCKET(fd); return -1;
 }
@@ -649,31 +649,32 @@ int g_eda_poll(g_eda_t* mgr, int msec)
 	tv.tv_sec = msec / 1000;
 	tv.tv_usec = msec % 1000 * 1000;
 
-    memcpy(&mgr->crfds,&mgr->rfds,sizeof(fd_set));
-    memcpy(&mgr->cwfds,&mgr->wfds,sizeof(fd_set));
-    memcpy(&mgr->cefds,&mgr->efds,sizeof(fd_set));
+	memcpy(&mgr->crfds,&mgr->rfds,sizeof(fd_set));
+	memcpy(&mgr->cwfds,&mgr->wfds,sizeof(fd_set));
+	memcpy(&mgr->cefds,&mgr->efds,sizeof(fd_set));
 
-    int retval = select(mgr->maxfd + 1,
-    		&mgr->crfds, &mgr->cwfds, &mgr->cefds, &tv);
-    int count = 0;
-    if (retval > 0) {
-    	int j;
-        for (j = 0; j <= mgr->maxfd; j++) {
-            int mask = 0;
+	int retval = select(mgr->maxfd + 1,
+			&mgr->crfds, &mgr->cwfds, &mgr->cefds, &tv);
+	int count = 0;
+	if (retval > 0) {
+		int j;
+		for (j = 0; j <= mgr->maxfd; j++) {
+			int mask = 0;
 
-            if (!FD_ISSET(j, &mgr->efds)) continue;	// a fd always in efds if it has not been deleted
-            if (FD_ISSET(j, &mgr->rfds) && FD_ISSET(j, &mgr->crfds))
-            	mask |= EDA_READ;
-            if (FD_ISSET(j, &mgr->wfds) && FD_ISSET(j, &mgr->cwfds))
-            	mask |= EDA_WRITE;
-            if (FD_ISSET(j, &mgr->cefds))
-            	mask |= EDA_ERROR;
+			if (FD_ISSET(j, &mgr->crfds))
+				mask |= EDA_READ;
+			if (FD_ISSET(j, &mgr->cwfds))
+				mask |= EDA_WRITE;
+			if (FD_ISSET(j, &mgr->cefds))
+				mask |= EDA_ERROR;
 
-            count++;
+			count++;
 
-            mgr->proc(mgr, j, mgr->user_data, mask);
-        }
-    }
+			if (mask != 0) {
+				mgr->proc(mgr, j, mgr->user_data, mask);
+			}
+		}
+	}
 
 	return count;
 }
