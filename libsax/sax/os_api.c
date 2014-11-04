@@ -203,15 +203,15 @@ void g_strtrim(char *s)
 /// @param pat A (potentially) corresponding string with wildcards
 /// @param is_case_sensitive By default, match on 'X' vs 'x'
 /// @param str For function names, for example, you can stop at the first '('
-int g_strmatch(const char *str, const char *pat, 
+int g_strmatch(const char *str, const char *pat,
 	int is_case_sensitive, char terminator)
 {
 	// location after the last '*', if we've encountered one
 	const char *pAfterLastWild = NULL;
-	
+
 	// location in the tame string, from which we started after last wildcard
 	const char *pAfterLastTame = NULL;
-	
+
 	// Walk the text strings one character at a time.
 	while (1)
 	{
@@ -257,7 +257,7 @@ int g_strmatch(const char *str, const char *pat,
 					pat = pAfterLastWild;
 					w = *pat;
 					if (!w || w == terminator) return 1; // "*" matches "x"
-					
+
 					if (!is_case_sensitive && w >= 'A' && w <= 'Z') w += ('a' - 'A');
 					if (t == w) pat++;
 					str++; continue; // "*sip*" matches "mississippi"
@@ -293,14 +293,14 @@ int g_url_decode(const char *src, int src_len, char *dst,
 {
 	int i, j, a, b;
 	if (src_len <= 0) src_len = strlen(src);
-	
+
 #define HEXTOI(x) (isdigit(x) ? x - '0' : x - 'W')
 
-	for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++) 
+	for (i = j = 0; i < src_len && j < dst_len - 1; i++, j++)
 	{
 		if (src[i] == '%' &&
 			isxdigit(* (unsigned char *) (src + i + 1)) &&
-			isxdigit(* (unsigned char *) (src + i + 2))) 
+			isxdigit(* (unsigned char *) (src + i + 2)))
 		{
 			a = tolower(* (unsigned char *) (src + i + 1));
 			b = tolower(* (unsigned char *) (src + i + 2));
@@ -314,9 +314,9 @@ int g_url_decode(const char *src, int src_len, char *dst,
 			dst[j] = src[i];
 		}
 	}
-	
+
 #undef HEXTOI
-	
+
 	dst[j] = '\0'; /* Null-terminate the destination */
 	return j;
 }
@@ -328,14 +328,14 @@ int g_url_encode(const char *src, char *dst, int dst_len)
 	const char *begin = dst;
 	const char *end = dst + dst_len - 1;
 
-	for (; *src != '\0' && dst < end; src++, dst++) 
+	for (; *src != '\0' && dst < end; src++, dst++)
 	{
 		if (isalnum(*(unsigned char *) src) ||
 			strchr(dont_escape, * (unsigned char *) src) != NULL)
 		{
 			*dst = *src;
 		}
-		else if (dst + 2 < end) 
+		else if (dst + 2 < end)
 		{
 			dst[0] = '%';
 			dst[1] = hex[(* (unsigned char *) src) >> 4];
@@ -347,7 +347,7 @@ int g_url_encode(const char *src, char *dst, int dst_len)
 	return (dst - begin);
 }
 
-static int b64_decode(const char *src, int src_len, 
+static int b64_decode(const char *src, int src_len,
 	unsigned char dst[], int dst_len)
 {
 	static const char _t256[256] = {
@@ -369,7 +369,7 @@ static int b64_decode(const char *src, int src_len,
 	char s[4] = {0, 0, 0, 0};
 	int cnt = 0;
 	const unsigned char *p;
-	
+
 	p = (const unsigned char *) src;
 	switch (src_len)
 	{
@@ -378,10 +378,10 @@ static int b64_decode(const char *src, int src_len,
 	case 2: if ((s[1]=_t256[(int)p[1]])==-1) return -1;
 	case 1: if ((s[0]=_t256[(int)p[0]])==-1) return -1;
 	}
-	
+
 	p = (const unsigned char *) s;
 	if (dst_len>0) {
-		dst[0] = (p[0] << 2) | (p[1] >> 4); 
+		dst[0] = (p[0] << 2) | (p[1] >> 4);
 		cnt = 1;
 	}
 	if (dst_len>1) {
@@ -396,29 +396,29 @@ static int b64_decode(const char *src, int src_len,
 	return (cnt < src_len ? cnt : src_len);
 }
 
-int g_b64_decode(const char *src, int src_len, 
+int g_b64_decode(const char *src, int src_len,
 	unsigned char *dst, int dst_len)
 {
 	int j=0;
 	if (src_len <= 0) src_len = strlen(src);
-	
+
 	while (src_len > 0 && j < dst_len)
 	{
 		int len = (src_len>=4 ? 4 : src_len);
 		int ret = b64_decode(src, len, dst+j, dst_len-j);
 		if (ret <= 0) return -1; // invalid
 		j += ret;
-		src += len; 
+		src += len;
 		src_len -= len;
 	}
 	return j;
 }
 
-// only alphanumerics, the special characters "$-_.+!*'(),", 
-// and reserved characters used for their reserved purposes 
+// only alphanumerics, the special characters "$-_.+!*'(),",
+// and reserved characters used for their reserved purposes
 // may be used unencoded within a URL.
 // @see URLs: http://www.rfc-editor.org/rfc/rfc1738.txt
-static int b64_encode(const unsigned char *src, 
+static int b64_encode(const unsigned char *src,
 	int src_len, char dst[], int dst_len)
 {
 	static const char _t64[64] = {
@@ -430,14 +430,14 @@ static int b64_encode(const unsigned char *src,
 	};
 	int cnt = 0;
 	unsigned char s[3] = {0, 0, 0};
-	
+
 	switch (src_len)
 	{
 	case 3: s[2] = src[2];
 	case 2: s[1] = src[1];
 	case 1: s[0] = src[0];
 	}
-	
+
 	// QS: adopt 6 bits for encoding
 	if (dst_len>0) {
 		dst[0] = _t64[((s[0]>>2))];
@@ -459,18 +459,18 @@ static int b64_encode(const unsigned char *src,
 	return (cnt < src_len ? cnt : src_len);
 }
 
-int g_b64_encode(const unsigned char *src, 
+int g_b64_encode(const unsigned char *src,
 	int src_len, char *dst, int dst_len)
 {
 	const char *begin = dst;
 	const char *end = dst + dst_len - 1;
-	
+
 	while (src_len > 0 && dst < end)
 	{
 		int len = (src_len>=3 ? 3 : src_len);
 		int ret = b64_encode(src, len, dst, end-dst);
 		dst += ret;
-		src += len; 
+		src += len;
 		src_len -= len;
 	}
 	*dst = '\0';
@@ -519,8 +519,8 @@ char **g_cmd_to_argv(const char *cmd, int* argc)
 	char**argv = (char**)malloc(i + (len+2)*sizeof(char));
 	char *line = (char *)(((char *)argv)+i);
 	int j, c, in_QUOT = 0, in_SPACE = 1;
-	
-	for (argv[c=0]=line, j=0; *cmd; cmd++) 
+
+	for (argv[c=0]=line, j=0; *cmd; cmd++)
 	{
 		if (in_QUOT) {
 			if (*cmd == '\"') in_QUOT = 0;
@@ -547,7 +547,7 @@ char **g_cmd_to_argv(const char *cmd, int* argc)
 	}
 	line[j] = '\0';
 	argv[c] = (char *) 0;
-	
+
 	*argc = c;
 	return argv;
 }
@@ -555,17 +555,17 @@ char **g_cmd_to_argv(const char *cmd, int* argc)
 int g_mkdir_recur(const char *dir)
 {
 	char *p, tmp[1024];
-	
+
 	if (!g_strlcpy(tmp, dir, sizeof(tmp))) return 0;
-	
+
 	for (p=tmp; *p; p++) {
 		if(*p=='\\') *p = '/';
 	}
-	
+
 	for (p=tmp; (p=strchr(p+1,'/')) && *(p+1); )
 	{
 		*p = '\0';
-		if (!g_exists_dir(tmp) && 
+		if (!g_exists_dir(tmp) &&
 			!g_create_dir(tmp)) return 0;
 		*p = '/';
 	}
@@ -660,17 +660,17 @@ DIR_HANDLE *g_opendir(const char *name)
 		SetLastError(ERROR_BAD_ARGUMENTS);
 		return ctx;
 	}
-	
+
 	ctx = (DIR_HANDLE *) malloc(sizeof(*ctx));
 	if (ctx == NULL) {
 		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
 		return ctx;
 	}
-	
-	(void) MultiByteToWideChar(CP_UTF8, 0, name, -1, 
+
+	(void) MultiByteToWideChar(CP_UTF8, 0, name, -1,
 		wpath, ARRAY_SIZE(wpath));
 	attrs = GetFileAttributesW(wpath);
-	if (attrs != 0xFFFFFFFF && (attrs & FILE_ATTRIBUTE_DIRECTORY)) 
+	if (attrs != 0xFFFFFFFF && (attrs & FILE_ATTRIBUTE_DIRECTORY))
 	{
 		(void) wcscat(wpath, L"\\*");
 		ctx->handle = FindFirstFileW(wpath, &ctx->info);
@@ -702,12 +702,12 @@ static time_t sys2unix(DWORD hi, DWORD lo)
 struct g_dirent_t *g_readdir(DIR_HANDLE *ctx)
 {
 	struct g_dirent_t *ret;
-	
+
 	if (ctx == NULL) {
 		SetLastError(ERROR_BAD_ARGUMENTS);
 		return NULL;
 	}
-	
+
 	if (ctx->handle == INVALID_HANDLE_VALUE)
 	{
 		SetLastError(ERROR_FILE_NOT_FOUND);
@@ -715,18 +715,18 @@ struct g_dirent_t *g_readdir(DIR_HANDLE *ctx)
 	}
 
 	ret = &ctx->result;
-	(void) WideCharToMultiByte(CP_UTF8, 0, 
-		ctx->info.cFileName, -1, 
+	(void) WideCharToMultiByte(CP_UTF8, 0,
+		ctx->info.cFileName, -1,
 		ret->dname, sizeof(ret->dname), 0, 0);
-	
+
 	ret->fsize = (uint64_t) ctx->info.nFileSizeHigh << 32;
 	ret->fsize |= ctx->info.nFileSizeLow;
 	ret->mtime = sys2unix(
 		ctx->info.ftLastWriteTime.dwHighDateTime,
 		ctx->info.ftLastWriteTime.dwLowDateTime);
-	ret->is_dir = (0 != (ctx->info.dwFileAttributes & 
+	ret->is_dir = (0 != (ctx->info.dwFileAttributes &
 		FILE_ATTRIBUTE_DIRECTORY));
-	
+
 	if (!FindNextFileW(ctx->handle, &ctx->info))
 	{
 		(void) FindClose(ctx->handle);
@@ -751,7 +751,7 @@ int g_mem_phys(uint64_t *_free, uint64_t *_total)
 	MEMORYSTATUSEX st;
 	st.dwLength = sizeof (st);
 	if (!GlobalMemoryStatusEx(&st)) return 0;
-	
+
 	if (_free) *_free = st.ullAvailPhys;
 	if (_total) *_total = st.ullTotalPhys;
 	return 1;
@@ -762,7 +762,7 @@ int g_mem_virt(uint64_t *_free, uint64_t *_total)
 	MEMORYSTATUSEX st;
 	st.dwLength = sizeof (st);
 	if (!GlobalMemoryStatusEx(&st)) return 0;
-	
+
 	if (_free) *_free = st.ullAvailVirtual;
 	if (_total) *_total = st.ullTotalVirtual;
 	return 1;
@@ -802,12 +802,12 @@ int g_cpu_usage(char tick[16], int *out)
 		LARGE_INTEGER liExpTimeZoneBias;
 		ULONG         uCurrentTimeZoneId;
 		DWORD         dwReserved;
-	} SYSTEM_TIME_INFORMATION;	
-	
+	} SYSTEM_TIME_INFORMATION;
+
 	static int NumberOfProcessors = 0;
 	SYSTEM_PERFORMANCE_INFORMATION _perf;
 	SYSTEM_TIME_INFORMATION _time;
-	
+
 	int64_t *_tick = (int64_t *) tick;
 
 	typedef LONG (WINAPI *PROC)(UINT, PVOID, ULONG, PULONG);
@@ -820,7 +820,7 @@ int g_cpu_usage(char tick[16], int *out)
 
 	if (NO_ERROR != NtQuerySystemInformation(
 		3, &_time, sizeof(_time), NULL)) return 0;
-	
+
 	if (0 == NumberOfProcessors) {
 		SYSTEM_BASIC_INFORMATION _base;
 		if (NO_ERROR != NtQuerySystemInformation(
@@ -833,7 +833,7 @@ int g_cpu_usage(char tick[16], int *out)
 		// diff = NewValue - OldValue
 		double idle = _perf.liIdleTime.QuadPart - _tick[0];
 		double syst = _time.liKeSystemTime.QuadPart - _tick[1];
-		
+
 		// CCpuUsage = 1 - (CpuIdle%) / NumberOfProcessors
 		double rate = 1 - (idle/syst)/NumberOfProcessors;
 		*out = (int) (rate*10000.0 + 0.5); // %%%
@@ -1018,7 +1018,7 @@ int64_t g_now_hr()
 		start = time(NULL);
 		Sleep(0); // yield!
 	}
-	
+
 	QueryPerformanceCounter(&count);
 	return (int64_t)start * (int64_t)1000000 +
 		(count.QuadPart - tick.QuadPart) * (int64_t)1000000 / freq.QuadPart;
@@ -1184,7 +1184,7 @@ g_sema_t *g_sema_init(uint32_t cap, uint32_t cnt)
 {
 	HANDLE h;
 	if (cnt > cap) cap = cnt;
-	
+
 	h = CreateSemaphore(
 		NULL,  // default security attributes
 		cnt,   // initial count
@@ -1518,9 +1518,9 @@ int f64lock(f64_t *f, int op)
 	DWORD low=1, high=0;
 	DWORD flag=(op&LOCK_NB)?LOCKFILE_FAIL_IMMEDIATELY:0;
 	OVERLAPPED lap;
-	
+
 	// bug for bug compatible with Unix
-	ZeroMemory(&lap, sizeof(lap)); 
+	ZeroMemory(&lap, sizeof(lap));
 	UnlockFileEx(f->fd, 0, low, high, &lap);
 
 	switch (op & ~LOCK_NB)
@@ -1814,17 +1814,17 @@ DIR_HANDLE *g_opendir(const char *name)
 	DIR_HANDLE *ctx = NULL;
 	DIR *dir = opendir(name);
 	if (!dir) return NULL;
-	
+
 	ctx = (DIR_HANDLE *) malloc(sizeof(*ctx));
 	ctx->dir = dir;
 	ctx->result.dname[0] = '\0';
-	
+
 	if (g_strlcpy(ctx->path, name, sizeof(ctx->path)))
 	{
 		int i = strlen(ctx->path)-1;
 		if (ctx->path[i] == '/') ctx->path[i] = 0;
 	}
-	
+
 	return ctx;
 }
 
@@ -1844,18 +1844,18 @@ struct g_dirent_t *g_readdir(DIR_HANDLE *ctx)
 	struct g_dirent_t *ret;
 	struct dirent *ent;
 	char tmp[512];
-	
+
 	if (!ctx || !ctx->dir) return NULL;
-	
+
 	ent = readdir(ctx->dir);
 	if (!ent) {
 		ctx->result.dname[0] = '\0';
 		return NULL;
 	}
-	
+
 	ret = &ctx->result;
 	strcpy(ret->dname, ent->d_name);
-	
+
 	sprintf(tmp, "%s/%s", ctx->path, ent->d_name);
 	if (stat(tmp, &st) == 0) {
 		ret->fsize = st.st_size;
@@ -1958,14 +1958,14 @@ int g_cpu_usage(char tick[16], int *out)
 		uint32_t _old[4], z1, z2, z3;
 		memcpy(_old, _neu, 16);
 		if (!read_cpu_time(_neu)) return 0;
-		
+
 		// total = user + nice + system + idle
 		z1 = _old[0] + _old[1] + _old[2] + _old[3];
 		z2 = _neu[0] + _neu[1] + _neu[2] + _neu[3];
-		
+
 		z3 = (_neu[0]+_neu[2]) - (_old[0]+_old[2]);
 		*out = (z3*100000/(1 + z2-z1)+5)/10; //%%%
-		
+
 		return 1;
 	}
 	return read_cpu_time(_neu);
@@ -2275,7 +2275,7 @@ static int bindthread(int cpu)
 }
 #endif
 
-int g_thread_bind(int cpu, const char *name) 
+int g_thread_bind(int cpu, const char *name)
 {
 	if (cpu >= 0) {
 		int num = sysconf(_SC_NPROCESSORS_CONF);
@@ -2339,7 +2339,7 @@ int64_t g_now_hr()
 	static int64_t freq;
 	static int64_t tick;
 	uint64_t now;
-	
+
 #if defined (__amd64__) || defined (__x86_64__)
 	uint32_t eax, edx;
 	asm volatile ("rdtsc" : "=a" (eax), "=d" (edx) : : "memory");
@@ -2722,7 +2722,7 @@ struct g_sema_t {sem_t sem;};
 g_sema_t *g_sema_init(uint32_t cap, uint32_t cnt)
 {
 	UNUSED_PARAMETER(cap);
-	
+
 	g_sema_t *s = (g_sema_t *) malloc(sizeof(g_sema_t));
 	if (s == NULL) return NULL;
 
@@ -2791,17 +2791,31 @@ void g_cond_free(g_cond_t *gc)
 /// @brief Wait for the signal.
 int g_cond_wait(g_cond_t *gc, g_mutex_t *mtx, double sec)
 {
+	int ret;
+
 	assert(gc);
+	assert(g_mutex_held(mtx));
+
+	assert(mtx->refs == 1); // recursive locking is not allowed
+	mtx->refs--;
+	mtx->owner = 0;
+
 	if (sec < 0) {
-		return (pthread_cond_wait(
+		ret = (pthread_cond_wait(
 			&gc->cond, &mtx->mutex)==0);
 	}
 	else {
 		struct timespec ts;
 		to_abs_ts(sec, &ts);
-		return (pthread_cond_timedwait(
+		ret = (pthread_cond_timedwait(
 			&gc->cond, &mtx->mutex, &ts)==0);
 	}
+
+	assert(mtx->refs == 0);
+	mtx->refs = 1;
+	mtx->owner = pthread_self();
+
+	return ret;
 }
 
 /// @brief Send the wake-up signal to another waiting thread.
@@ -3152,16 +3166,16 @@ uint64_t g_now_uid()
 {
 	static uint64_t _tic = 0;
 	uint64_t now = g_now_us();
-	
+
 	static long _ack = 0; //locker
 	while (g_ifeq_set(&_ack, 0, 1)) g_thread_yield();
-	
+
 	// "now" equal to "_tic" in all cases
 	if (_tic < now) _tic = now;
-	else now = ++_tic; 
-	
+	else now = ++_tic;
+
 	g_lock_set(&_ack, 0); //unlock
-	return now; 
+	return now;
 }
 
 #define SECS_PER_HOUR (60 * 60)
@@ -3192,10 +3206,10 @@ struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset)
 	days = sec / SECS_PER_DAY;
 	rem  = sec % SECS_PER_DAY;
 	rem += offset;
-	
+
 	while (rem < 0) { rem += SECS_PER_DAY; --days;}
 	while (rem >= SECS_PER_DAY) { rem -= SECS_PER_DAY; ++days;}
-	
+
 	tp->tm_hour = rem / SECS_PER_HOUR;
 	rem %= SECS_PER_HOUR;
 	tp->tm_min = rem / 60;
@@ -3204,7 +3218,7 @@ struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset)
 	/* January 1, 1970 was a Thursday. */
 	tp->tm_wday = (4 + days) % 7;
 	if (tp->tm_wday < 0) tp->tm_wday += 7;
-	
+
 	y = 1970;
 	while (days < 0 || days >= (IS_LEAP_YEAR(y) ? 366 : 365))
     {
@@ -3212,18 +3226,18 @@ struct tm* g_localtime(time_t _sec, struct tm *_tp, long offset)
 		long yg = y + days / 365 - (days % 365 < 0);
 
 		/* Adjust DAYS and Y to match the guessed year. */
-		days -= ((yg - y) * 365 + 
+		days -= ((yg - y) * 365 +
 			LEAPS_THRU_END_OF (yg - 1)- LEAPS_THRU_END_OF (y - 1));
-		
+
 		y = yg;
     }
-    
+
 	tp->tm_year = y - 1900;
 	tp->tm_yday = days;
 	ip = __mon_yday[IS_LEAP_YEAR(y)];
-	
+
 	for (y = 11; days < (long int) ip[y]; --y) continue;
-	
+
 	days -= ip[y];
 	tp->tm_mon = y;
 	tp->tm_mday = days + 1;
@@ -3351,4 +3365,3 @@ int m64lock(m64_t *m, int op)
 	return f64lock(m->f64, op);
 }
 //-------------------------------------------------------------------------
-
